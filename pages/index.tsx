@@ -130,8 +130,6 @@ export default function Contracts(props: { query: any }) {
       })
   }
 
-  console.log(contracts)
-
   return (
     <>
       <PageHead title={'SourceScan'} />

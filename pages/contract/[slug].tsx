@@ -19,7 +19,6 @@ import GithubLink from '@/components/Common/GithubLink'
 import IconLink from '@/components/Common/IconLink'
 import PageHead from '@/components/Common/PageHead'
 import PageRefresh from '@/components/Common/PageRefresh'
-import api from '@/utils/apis/api'
 import axios from 'axios'
 
 export default function Contract() {
@@ -28,7 +27,14 @@ export default function Contract() {
   const accountId = router.query.slug as string
 
   const [data, setData] = useState<any>(null)
+  const [metadata, setMetadata] = useState<any>(null)
+  const [wasmMatch, setWasmMatch] = useState<boolean | null>(null)
+  const [wasmError, setWasmError] = useState<string | null>(null)
+  const [txError, setTxError] = useState<string | null>(null)
+
   useEffect(() => {
+    if (!accountId) return
+
     axios
       .post(rpc, {
         jsonrpc: '2.0',
@@ -54,12 +60,6 @@ export default function Contract() {
       })
   }, [accountId])
 
-  console.log(data)
-
-  const [wasmMatch, setWasmMatch] = useState<boolean | null>(null)
-  const [wasmError, setWasmError] = useState<string | null>(null)
-  const [txMatch, setTxMatch] = useState<boolean | null>(null)
-  const [txError, setTxError] = useState<string | null>(null)
   useEffect(() => {
     if (!data) return
 
@@ -75,30 +75,33 @@ export default function Contract() {
         },
       })
       .then((res) => {
-        axios
-          .get(
-            `${process.env.NEXT_PUBLIC_API_HOST}/ipfs/${data.cid}/wasm_code_base64`
-          )
-          .then((res2) => {
-            setWasmMatch(res2.data === res.data.result.code_base64)
-          })
-          .catch((err) => {
-            setWasmError(err.message)
-          })
+        setWasmMatch(res.data.result.hash === data.code_hash)
       })
       .catch((err) => {
         setWasmError(err.message)
         setWasmMatch(false)
       })
 
-    api
-      .post('/api/ipfs/getTxHash', { cid: data.cid })
+    axios
+      .post(rpc, {
+        jsonrpc: '2.0',
+        id: 'dontcare',
+        method: 'query',
+        params: {
+          request_type: 'call_function',
+          finality: 'final',
+          account_id: process.env.NEXT_PUBLIC_CONTRACT,
+          method_name: 'contract_source_metadata',
+          args_base64: '',
+        },
+      })
       .then((res) => {
-        setTxMatch(res.data.tx_hash === data.deploy_tx)
+        const str_res = ascii_to_str(res.data.result.result)
+        const json_res = JSON.parse(str_res)
+        setMetadata(json_res)
       })
       .catch((err) => {
         setTxError(err.message)
-        setTxMatch(false)
       })
   }, [data])
 
@@ -168,33 +171,14 @@ export default function Contract() {
                 ) : wasmMatch ? (
                   <HStack>
                     <CheckIcon />
-                    <Text>Wasm Code Matches</Text>
+                    <Text>Code Hash Matches</Text>
                   </HStack>
                 ) : (
                   <HStack>
                     <CloseIcon />
-                    <Text>Wasm Code Mismatches</Text>
+                    <Text>Code Hash Mismatches</Text>
                   </HStack>
                 )}
-                {txMatch === null ? (
-                  <Spinner size={'sm'} />
-                ) : txMatch ? (
-                  <HStack>
-                    <CheckIcon />
-                    <Text>Deploy Tx Matches</Text>
-                  </HStack>
-                ) : (
-                  <HStack>
-                    <CloseIcon />
-                    <Text>Deploy Tx Mismatches</Text>
-                  </HStack>
-                )}
-              </Stack>
-              <Stack spacing={'4'}>
-                <DefaultHeading>Entry Point</DefaultHeading>
-                <Text fontSize={{ base: 'md', md: 'lg' }}>
-                  {data.entry_point}
-                </Text>
               </Stack>
               <Stack spacing={'4'}>
                 <DefaultHeading>Lang</DefaultHeading>
@@ -204,6 +188,18 @@ export default function Contract() {
                     : data.lang === 'rust'
                     ? 'Rust'
                     : 'unknown'}
+                </Text>
+              </Stack>
+              <Stack spacing={'4'}>
+                <DefaultHeading>Block</DefaultHeading>
+                <Text fontSize={{ base: 'md', md: 'lg' }}>
+                  {data.block_height}
+                </Text>
+              </Stack>
+              <Stack spacing={'4'}>
+                <DefaultHeading>Code Hash</DefaultHeading>
+                <Text fontSize={{ base: 'md', md: 'lg' }}>
+                  {data.code_hash}
                 </Text>
               </Stack>
               <Stack>
@@ -223,6 +219,64 @@ export default function Contract() {
                 <DefaultHeading>Github</DefaultHeading>
                 {data?.github ? <GithubLink github={data.github} /> : null}
               </Stack>
+              {metadata ? (
+                <>
+                  <DefaultHeading>Contract Metadata</DefaultHeading>
+                  <Stack spacing={'4'}>
+                    <Stack spacing={'4'}>
+                      <DefaultHeading>Version</DefaultHeading>
+                      <Text fontSize={{ base: 'md', md: 'lg' }}>
+                        {metadata.version || 'N/A'}
+                      </Text>
+                    </Stack>
+                    <DefaultHeading>Link</DefaultHeading>
+                    <Text fontSize={{ base: 'md', md: 'lg' }}>
+                      <a
+                        href={metadata.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {metadata.link}
+                      </a>
+                    </Text>
+                  </Stack>
+                  <DefaultHeading>Build Info</DefaultHeading>
+                  <Stack spacing={'4'}>
+                    <DefaultHeading>Build Command</DefaultHeading>
+                    <Text fontSize={{ base: 'md', md: 'lg' }}>
+                      {metadata.build_info.build_command.join(' ')}
+                    </Text>
+                  </Stack>
+                  <Stack spacing={'4'}>
+                    <DefaultHeading>Build Environment</DefaultHeading>
+                    <Text fontSize={{ base: 'md', md: 'lg' }}>
+                      {metadata.build_info.build_environment}
+                    </Text>
+                  </Stack>
+                  <Stack spacing={'4'}>
+                    <DefaultHeading>Source Snapshot</DefaultHeading>
+                    <Text fontSize={{ base: 'md', md: 'lg' }}>
+                      <a
+                        href={metadata.build_info.source_code_snapshot}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {metadata.build_info.source_code_snapshot}
+                      </a>
+                    </Text>
+                  </Stack>
+                  <Stack spacing={'4'}>
+                    <DefaultHeading>Standards</DefaultHeading>
+                    <Text fontSize={{ base: 'md', md: 'lg' }}>
+                      {metadata.standards
+                        .map((s: any) => `${s.standard}:v${s.version}`)
+                        .join(', ')}
+                    </Text>
+                  </Stack>
+                </>
+              ) : (
+                <Spinner />
+              )}
             </Stack>
           ) : (
             <Spinner size={'lg'} />
