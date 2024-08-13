@@ -1,9 +1,9 @@
 import { Box, Center, Stack, Text } from '@chakra-ui/react'
 
 import CidLink from '@/components/Common/CidLink'
-import IconLink from '@/components/Common/IconLink'
 import Approved from '@/components/Contracts/Approved'
 import DefaultButton from '@/components/Inputs/DefaultButton'
+import { truncateStringInMiddle } from '@/utils/truncate'
 import TableHeading from './TableHeading'
 
 export default function ContractsCard(props: {
@@ -23,9 +23,10 @@ export default function ContractsCard(props: {
       {props.contracts?.map((contract: any, i: number) => {
         const accountId = contract[0]
         const lang = contract[1].lang
+        const blockHeight = contract[1].block_height
+        const codeHash = contract[1].code_hash
         const cid = contract[1].cid
-        const deploy_tx = contract[1].deploy_tx
-        const github = contract[1].github
+
         return (
           <Box
             key={i}
@@ -42,34 +43,19 @@ export default function ContractsCard(props: {
               <TableHeading label={'Lang'}>
                 <Text textAlign={'end'}>{lang}</Text>
               </TableHeading>
+              <TableHeading label={'Block Height'}>
+                <Text textAlign={'end'}>{blockHeight}</Text>
+              </TableHeading>
+              <TableHeading label={'Code Hash'}>
+                <Text textAlign={'end'}>
+                  {truncateStringInMiddle(codeHash, 8)}
+                </Text>
+              </TableHeading>
               <TableHeading label={'CID'}>
                 <CidLink cid={cid} isTruncated />
               </TableHeading>
-              <TableHeading label={'Github'}>
-                {github ? (
-                  <>
-                    <Text textAlign={'end'}>
-                      {github.owner}/{github.repo}
-                    </Text>
-                    <IconLink
-                      onClick={() => {
-                        window.open(
-                          `https://github.com/${github.owner}/${github.repo}/tree/${github.sha}`,
-                          '_blank'
-                        )
-                      }}
-                    />
-                  </>
-                ) : (
-                  <Text textAlign={'end'}>None</Text>
-                )}
-              </TableHeading>
               <TableHeading label={'Approved'}>
-                <Approved
-                  accountId={accountId}
-                  cid={cid}
-                  deploy_tx={deploy_tx}
-                />
+                <Approved accountId={accountId} cid={cid} codeHash={codeHash} />
               </TableHeading>
               <Center>
                 <DefaultButton onClick={() => props.handleShowMore(accountId)}>

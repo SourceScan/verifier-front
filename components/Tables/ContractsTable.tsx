@@ -36,14 +36,12 @@ export default function ContractsTable(props: {
             <Th>Block Height</Th>
             <Th>Code Hash</Th>
             <Th>IPFS</Th>
-            <Th>Github</Th>
             <Th>Approved</Th>
             <Th></Th>
           </Tr>
         </Thead>
         <Tbody>
           {props.contracts?.map((contract: any, i: number) => {
-            console.log(contract)
             const accountId = contract[0]
             const lang = contract[1].lang
             const blockHeight = contract[1].block_height
