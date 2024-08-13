@@ -1,10 +1,13 @@
+import { GithubDto } from '@/Interfaces/github/github.dto'
+import { extractGitHubDetails } from '@/utils/extractGithub'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
 import { rpc } from '@/utils/near/rpc'
-import { CheckIcon, CloseIcon } from '@chakra-ui/icons'
+import { CheckIcon, CloseIcon, ExternalLinkIcon } from '@chakra-ui/icons'
 import {
   Flex,
   HStack,
   Heading,
+  Link,
   Spinner,
   Stack,
   Text,
@@ -19,6 +22,7 @@ import GithubLink from '@/components/Common/GithubLink'
 import IconLink from '@/components/Common/IconLink'
 import PageHead from '@/components/Common/PageHead'
 import PageRefresh from '@/components/Common/PageRefresh'
+import { getDockerHubLink, getImageNameAndDigest } from '@/utils/getDockerHub'
 import axios from 'axios'
 
 export default function Contract() {
@@ -31,6 +35,7 @@ export default function Contract() {
   const [wasmMatch, setWasmMatch] = useState<boolean | null>(null)
   const [wasmError, setWasmError] = useState<string | null>(null)
   const [txError, setTxError] = useState<string | null>(null)
+  const [github, setGithub] = useState<GithubDto | null>(null)
 
   useEffect(() => {
     if (!accountId) return
@@ -90,7 +95,7 @@ export default function Contract() {
         params: {
           request_type: 'call_function',
           finality: 'final',
-          account_id: process.env.NEXT_PUBLIC_CONTRACT,
+          account_id: accountId,
           method_name: 'contract_source_metadata',
           args_base64: '',
         },
@@ -99,11 +104,19 @@ export default function Contract() {
         const str_res = ascii_to_str(res.data.result.result)
         const json_res = JSON.parse(str_res)
         setMetadata(json_res)
+
+        // TODO: Refactor
+        try {
+          const github = extractGitHubDetails(
+            json_res.build_info.source_code_snapshot
+          )
+          github && setGithub(github)
+        } catch (e) {}
       })
       .catch((err) => {
         setTxError(err.message)
       })
-  }, [data])
+  }, [data, accountId])
 
   useEffect(() => {
     if (!wasmError) return
@@ -221,48 +234,11 @@ export default function Contract() {
               </Stack>
               {metadata ? (
                 <>
-                  <DefaultHeading>Contract Metadata</DefaultHeading>
+                  <Heading fontSize={'lg'}>Contract Metadata</Heading>
                   <Stack spacing={'4'}>
-                    <Stack spacing={'4'}>
-                      <DefaultHeading>Version</DefaultHeading>
-                      <Text fontSize={{ base: 'md', md: 'lg' }}>
-                        {metadata.version || 'N/A'}
-                      </Text>
-                    </Stack>
-                    <DefaultHeading>Link</DefaultHeading>
+                    <DefaultHeading>Version</DefaultHeading>
                     <Text fontSize={{ base: 'md', md: 'lg' }}>
-                      <a
-                        href={metadata.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {metadata.link}
-                      </a>
-                    </Text>
-                  </Stack>
-                  <DefaultHeading>Build Info</DefaultHeading>
-                  <Stack spacing={'4'}>
-                    <DefaultHeading>Build Command</DefaultHeading>
-                    <Text fontSize={{ base: 'md', md: 'lg' }}>
-                      {metadata.build_info.build_command.join(' ')}
-                    </Text>
-                  </Stack>
-                  <Stack spacing={'4'}>
-                    <DefaultHeading>Build Environment</DefaultHeading>
-                    <Text fontSize={{ base: 'md', md: 'lg' }}>
-                      {metadata.build_info.build_environment}
-                    </Text>
-                  </Stack>
-                  <Stack spacing={'4'}>
-                    <DefaultHeading>Source Snapshot</DefaultHeading>
-                    <Text fontSize={{ base: 'md', md: 'lg' }}>
-                      <a
-                        href={metadata.build_info.source_code_snapshot}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {metadata.build_info.source_code_snapshot}
-                      </a>
+                      {metadata.version || 'N/A'}
                     </Text>
                   </Stack>
                   <Stack spacing={'4'}>
@@ -272,6 +248,50 @@ export default function Contract() {
                         .map((s: any) => `${s.standard}:v${s.version}`)
                         .join(', ')}
                     </Text>
+                  </Stack>
+                  <Stack spacing={'4'}>
+                    <DefaultHeading>Git</DefaultHeading>
+                    {github ? <GithubLink github={github} /> : null}
+                  </Stack>
+                  <Stack spacing={'4'}>
+                    <DefaultHeading>Build Command</DefaultHeading>
+                    <Text fontSize={{ base: 'md', md: 'lg' }}>
+                      {metadata.build_info.build_command.join(' ')}
+                    </Text>
+                  </Stack>
+                  <Stack spacing={'4'}>
+                    <DefaultHeading>Build Environment</DefaultHeading>
+                    {metadata.build_info.build_environment ? (
+                      <Stack>
+                        {(() => {
+                          const { imageName, digest } = getImageNameAndDigest(
+                            metadata.build_info.build_environment
+                          )
+                          return (
+                            <>
+                              <HStack>
+                                <Text fontSize={{ base: 'md', md: 'lg' }}>
+                                  {imageName}
+                                </Text>{' '}
+                                <Link
+                                  href={getDockerHubLink(
+                                    metadata.build_info.build_environment
+                                  )}
+                                  isExternal
+                                  fontSize={{ base: 'md', md: 'lg' }}
+                                >
+                                  <ExternalLinkIcon />
+                                </Link>
+                              </HStack>
+                            </>
+                          )
+                        })()}
+                      </Stack>
+                    ) : (
+                      <Text fontSize={{ base: 'md', md: 'lg' }}>
+                        {metadata.build_info.build_environment}
+                      </Text>
+                    )}
                   </Stack>
                 </>
               ) : (
