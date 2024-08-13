@@ -1,11 +1,10 @@
+import { truncateStringInMiddle } from '@/utils/truncate'
 import { InfoIcon } from '@chakra-ui/icons'
 import {
-  HStack,
   Table,
   TableContainer,
   Tbody,
   Td,
-  Text,
   Th,
   Thead,
   Tr,
@@ -13,7 +12,6 @@ import {
 
 import CidLink from '../Common/CidLink'
 import DefaultTooltip from '../Common/DefaultTooltip'
-import IconLink from '../Common/IconLink'
 import Approved from '../Contracts/Approved'
 
 export default function ContractsTable(props: {
@@ -35,6 +33,8 @@ export default function ContractsTable(props: {
           <Tr>
             <Th>Contract</Th>
             <Th>Lang</Th>
+            <Th>Block Height</Th>
+            <Th>Code Hash</Th>
             <Th>IPFS</Th>
             <Th>Github</Th>
             <Th>Approved</Th>
@@ -43,42 +43,26 @@ export default function ContractsTable(props: {
         </Thead>
         <Tbody>
           {props.contracts?.map((contract: any, i: number) => {
+            console.log(contract)
             const accountId = contract[0]
             const lang = contract[1].lang
+            const blockHeight = contract[1].block_height
+            const codeHash = contract[1].code_hash
             const cid = contract[1].cid
-            const deploy_tx = contract[1].deploy_tx
-            const github = contract[1].github
             return (
               <Tr key={i}>
                 <Td>{accountId}</Td>
                 <Td>{lang}</Td>
+                <Td>{blockHeight}</Td>
+                <Td>{truncateStringInMiddle(codeHash, 8)}</Td>
                 <Td>
                   <CidLink cid={cid} isTruncated />
-                </Td>
-                <Td>
-                  {github ? (
-                    <HStack>
-                      <Text>
-                        {github.owner}/{github.repo}
-                      </Text>
-                      <IconLink
-                        onClick={() => {
-                          window.open(
-                            `https://github.com/${github.owner}/${github.repo}/tree/${github.sha}`,
-                            '_blank'
-                          )
-                        }}
-                      />
-                    </HStack>
-                  ) : (
-                    'None'
-                  )}
                 </Td>
                 <Td>
                   <Approved
                     accountId={accountId}
                     cid={cid}
-                    deploy_tx={deploy_tx}
+                    codeHash={codeHash}
                   />
                 </Td>
                 <Td>
