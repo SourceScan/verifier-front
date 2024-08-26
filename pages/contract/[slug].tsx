@@ -252,7 +252,7 @@ export default function Contract() {
                         }/tree/${github.sha}/${formatSourceCodePath(
                           metadata.build_info.contract_path,
                           'rust'
-                        )}`}
+                        )}/lib.rs`}
                         isExternal
                       >
                         <ExternalLinkIcon />
