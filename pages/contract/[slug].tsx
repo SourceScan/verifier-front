@@ -8,6 +8,7 @@ import {
   HStack,
   Heading,
   Link,
+  Skeleton,
   Spinner,
   Stack,
   Text,
@@ -22,6 +23,7 @@ import GithubLink from '@/components/Common/GithubLink'
 import IconLink from '@/components/Common/IconLink'
 import PageHead from '@/components/Common/PageHead'
 import PageRefresh from '@/components/Common/PageRefresh'
+import { formatSourceCodePath } from '@/utils/formatPath'
 import { getDockerHubLink, getImageNameAndDigest } from '@/utils/getDockerHub'
 import axios from 'axios'
 
@@ -36,6 +38,7 @@ export default function Contract() {
   const [wasmError, setWasmError] = useState<string | null>(null)
   const [txError, setTxError] = useState<string | null>(null)
   const [github, setGithub] = useState<GithubDto | null>(null)
+  const [loadingLinks, setLoadingLinks] = useState(true)
 
   useEffect(() => {
     if (!accountId) return
@@ -105,7 +108,6 @@ export default function Contract() {
         const json_res = JSON.parse(str_res)
         setMetadata(json_res)
 
-        // TODO: Refactor
         try {
           const github = extractGitHubDetails(
             json_res.build_info.source_code_snapshot
@@ -115,6 +117,9 @@ export default function Contract() {
       })
       .catch((err) => {
         setTxError(err.message)
+      })
+      .finally(() => {
+        setLoadingLinks(false)
       })
   }, [data, accountId])
 
@@ -232,6 +237,41 @@ export default function Contract() {
                 <DefaultHeading>Github</DefaultHeading>
                 {data?.github ? <GithubLink github={data.github} /> : null}
               </Stack>
+              {/* New Section for Links to Source Code */}
+              <Stack spacing={'4'}>
+                <DefaultHeading>Source Code</DefaultHeading>
+                <HStack>
+                  <Text>Github</Text>
+                  {loadingLinks ? (
+                    <Skeleton height="20px" width="150px" />
+                  ) : (
+                    github && (
+                      <Link
+                        href={`https://github.com/${github.owner}/${
+                          github.repo
+                        }/tree/${github.sha}/${formatSourceCodePath(
+                          metadata.build_info.contract_path,
+                          'rust'
+                        )}`}
+                        isExternal
+                      >
+                        <ExternalLinkIcon />
+                      </Link>
+                    )
+                  )}
+                </HStack>
+                <HStack>
+                  <Text>Code Viewer (IPFS)</Text>
+                  {loadingLinks ? (
+                    <Skeleton height="20px" width="150px" />
+                  ) : (
+                    <Link href={`/code/${accountId}`}>
+                      <ExternalLinkIcon />
+                    </Link>
+                  )}
+                </HStack>
+              </Stack>
+
               {metadata ? (
                 <>
                   <Heading fontSize={'lg'}>Contract Metadata</Heading>

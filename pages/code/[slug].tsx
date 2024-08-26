@@ -25,7 +25,15 @@ export default function Code() {
 
   const [loading, setLoading] = useState<boolean>(true)
   const [data, setData] = useState<any>(null)
+  const [metadata, setMetadata] = useState<any>(null)
+  const [files, setFiles] = useState<any>(null)
+  const [selectedFilePath, setSelectedFilePath] = useState<any>(null)
+  const [codeValue, setCodeValue] = useState<any>(null)
+
   useEffect(() => {
+    if (!accountId) return
+
+    // Fetch the contract data
     axios
       .post(rpc, {
         jsonrpc: '2.0',
@@ -44,7 +52,6 @@ export default function Code() {
       .then((res) => {
         const str_res = ascii_to_str(res.data.result.result)
         const json_res = JSON.parse(str_res)
-        if (!json_res) return
         setData(json_res)
       })
       .catch((err) => {
@@ -52,30 +59,58 @@ export default function Code() {
       })
   }, [accountId])
 
-  const [files, setFiles] = useState<any>(null)
   useEffect(() => {
     if (!data) return
 
-    const sourcePath = formatSourceCodePath(data.entry_point, data.lang)
-    api
-      .get('/api/ipfs/structure', {
+    // Fetch the contract metadata
+    axios
+      .post(rpc, {
+        jsonrpc: '2.0',
+        id: 'dontcare',
+        method: 'query',
         params: {
-          cid: data.cid,
-          path: sourcePath,
+          request_type: 'call_function',
+          finality: 'final',
+          account_id: accountId,
+          method_name: 'contract_source_metadata',
+          args_base64: '',
         },
       })
       .then((res) => {
-        setFiles(res.data.structure.filter((file: any) => file.type === 'file'))
+        const str_res = ascii_to_str(res.data.result.result)
+        const json_res = JSON.parse(str_res)
+        setMetadata(json_res)
+
+        // Fetch file structure from IPFS based on metadata
+        const sourcePath = formatSourceCodePath(
+          json_res.build_info.contract_path,
+          data.lang
+        )
+        api
+          .get('/api/ipfs/structure', {
+            params: {
+              cid: data.cid,
+              path: sourcePath,
+            },
+          })
+          .then((res) => {
+            setFiles(
+              res.data.structure.filter((file: any) => file.type === 'file')
+            )
+          })
+          .catch((err) => {
+            console.log(err)
+          })
       })
       .catch((err) => {
         console.log(err)
       })
-  }, [data])
+  }, [data, accountId])
 
-  const [selectedFilePath, setSelectedFilePath] = useState<any>(null)
   useEffect(() => {
     if (!files || !data) return
 
+    // Set the default file path to be displayed
     const entryName = data.lang === 'rust' ? 'lib.rs' : ''
     const entryFile = (files.filter((file: any) => file.name === entryName) ||
       files)[0]
@@ -83,10 +118,10 @@ export default function Code() {
     setSelectedFilePath(entryFile.path)
   }, [files, data])
 
-  const [codeValue, setCodeValue] = useState<any>(null)
   useEffect(() => {
     if (!selectedFilePath) return
 
+    // Fetch the code content from IPFS
     axios
       .get(`${process.env.NEXT_PUBLIC_API_HOST}/ipfs/${selectedFilePath}`)
       .then((res) => {
