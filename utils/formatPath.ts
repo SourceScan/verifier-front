@@ -3,7 +3,7 @@ const formatSourceCodePath = (path: String, lang: String) => {
 
   segments.pop()
   if (lang === 'rust') {
-    segments.push('src/lib.rs')
+    segments.push('src')
   }
 
   return segments.join('/')
