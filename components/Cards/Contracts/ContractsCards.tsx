@@ -43,7 +43,7 @@ export default function ContractsCard(props: {
 
   return (
     <Stack
-      w={'100%'}
+      w={'95%'}
       maxWidth="600px"
       spacing={'10'}
       display={{
@@ -142,64 +142,7 @@ export default function ContractsCard(props: {
         )
       })}
 
-      {/* Add placeholder cards to maintain consistent component height */}
-      {props.contracts &&
-        Array.from({
-          length: limit - Math.min(props.contracts.length, limit),
-        }).map((_, i) => (
-          <Box
-            key={`placeholder-${i}`}
-            borderColor={'gray.500'}
-            borderWidth={'1px'}
-            rounded={'lg'}
-            p={'4'}
-            height="320px" // Slightly increased to account for new button
-            display={{ base: 'flex', md: 'none' }}
-            opacity="0.5"
-          >
-            <Stack spacing={'4'} width={'full'}>
-              <TableHeading label={'Contract'}>
-                <Text>&nbsp;</Text>
-              </TableHeading>
-              <TableHeading label={'Block Height'}>
-                <Text>&nbsp;</Text>
-              </TableHeading>
-              <TableHeading label={'Code Hash'}>
-                <Text>&nbsp;</Text>
-              </TableHeading>
-              <TableHeading label={'CID'}>
-                <Text>&nbsp;</Text>
-              </TableHeading>
-              <TableHeading label={'Approved'}>
-                <Text>&nbsp;</Text>
-              </TableHeading>
-              <HStack spacing={3} justifyContent="center">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  leftIcon={<VscCode />}
-                  isDisabled={true}
-                  bg="transparent"
-                  color={colorMode === 'dark' ? 'gray.600' : 'gray.300'}
-                  borderColor={colorMode === 'dark' ? 'gray.600' : 'gray.300'}
-                >
-                  Code
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  leftIcon={<InfoIcon />}
-                  isDisabled={true}
-                  bg="transparent"
-                  color={colorMode === 'dark' ? 'gray.600' : 'gray.300'}
-                  borderColor={colorMode === 'dark' ? 'gray.600' : 'gray.300'}
-                >
-                  Info
-                </Button>
-              </HStack>
-            </Stack>
-          </Box>
-        ))}
+      {/* Placeholder cards removed for mobile UI */}
     </Stack>
   )
 }

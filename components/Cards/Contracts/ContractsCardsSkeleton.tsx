@@ -12,7 +12,7 @@ export default function ContractsCardsSkeleton({
 
   return (
     <Stack
-      w={'100%'}
+      w={'95%'}
       maxWidth="600px"
       spacing={'10'}
       display={{
