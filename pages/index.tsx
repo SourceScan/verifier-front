@@ -17,7 +17,6 @@ import {
   Input,
   Spinner,
   Stack,
-  Text,
   useColorMode,
   useColorModeValue,
 } from '@chakra-ui/react'
@@ -228,15 +227,6 @@ export default function Contracts(props: { query: any }) {
             display={contracts ? 'flex' : 'none'}
             direction={{ base: 'column', md: 'row' }}
           >
-            {contracts && search && (
-              <Text
-                fontSize="sm"
-                color={colorMode === 'dark' ? 'gray.300' : 'gray.600'}
-                mr={4}
-              >
-                {contracts.length}
-              </Text>
-            )}
             <HStack>
               <Input
                 w={'150px'}
