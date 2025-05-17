@@ -286,9 +286,8 @@ export default function Code() {
                 width="100%"
                 borderBottomWidth="2px"
                 borderTopWidth={'2px'}
-                borderColor={color}
-                color={color}
-                bg={bg}
+                color={colorMode === 'dark' ? color.dark : color.light}
+                bg={colorMode === 'dark' ? bg.dark : bg.light}
                 position="sticky"
                 top="64px"
                 zIndex={10}
@@ -305,8 +304,8 @@ export default function Code() {
                 >
                   <HStack
                     spacing={4}
-                    color={color}
-                    bg={bg}
+                    color={colorMode === 'dark' ? color.dark : color.light}
+                    bg={colorMode === 'dark' ? bg.dark : bg.light}
                     p={2}
                     borderRadius="md"
                   >
@@ -338,9 +337,8 @@ export default function Code() {
             >
               <Box
                 borderWidth="1px"
-                borderColor={color}
-                color={color}
-                bg={bg}
+                color={colorMode === 'dark' ? color.dark : color.light}
+                bg={colorMode === 'dark' ? bg.dark : bg.light}
                 borderRadius="md"
                 overflow="hidden"
                 boxShadow="sm"

@@ -49,13 +49,7 @@ export default function NetSelector() {
         px={{ base: 2, md: 4 }}
         py={{ base: 1, md: 2 }}
       >
-        <Box
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          bg={bg}
-          color={textColor}
-        >
+        <Box display="flex" alignItems="center" justifyContent="center">
           <Text display={{ base: 'none', md: 'flex' }} mr={1}>
             Network:
           </Text>
@@ -65,10 +59,13 @@ export default function NetSelector() {
           />
         </Box>
       </MenuButton>
-      <MenuList bg={bg} color={textColor}>
+      <MenuList
+        bg={colorMode === 'dark' ? bg.dark : bg.light}
+        color={textColor}
+      >
         {Object.entries(NETWORKS).map(([key, value]) => (
           <MenuItem
-            bg={bg}
+            bg={colorMode === 'dark' ? bg.dark : bg.light}
             color={textColor}
             key={key}
             onClick={() => handleNetworkChange(key as NetworkType)}
