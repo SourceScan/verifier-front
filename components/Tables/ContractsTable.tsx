@@ -22,6 +22,15 @@ export default function ContractsTable(props: {
 }) {
   // Use the limit provided by the parent component
   const limit = props.currentLimit
+
+  // Generate a unique key for the current set of contracts
+  // This ensures Approved components remount when contracts change
+  const contractsKey = props.contracts
+    ? props.contracts
+        .map((c: any) => c[0])
+        .join('-')
+        .substring(0, 20)
+    : 'no-contracts'
   return (
     <TableContainer
       borderColor={'gray.500'}
@@ -99,6 +108,7 @@ export default function ContractsTable(props: {
                     accountId={accountId}
                     cid={cid}
                     codeHash={codeHash}
+                    key={`${contractsKey}-${accountId}`}
                   />
                 </Td>
                 <Td>

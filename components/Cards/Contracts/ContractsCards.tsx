@@ -9,7 +9,19 @@ import TableHeading from './TableHeading'
 export default function ContractsCard(props: {
   contracts: any
   handleShowMore: (_accountId: string) => void
+  currentLimit?: number
 }) {
+  // Default to 5 items if not specified
+  const limit = props.currentLimit || 5
+
+  // Generate a unique key for the current set of contracts
+  // This ensures Approved components remount when contracts change
+  const contractsKey = props.contracts
+    ? props.contracts
+        .map((c: any) => c[0])
+        .join('-')
+        .substring(0, 20)
+    : 'no-contracts'
   return (
     <Stack
       w={'100%'}
@@ -21,6 +33,7 @@ export default function ContractsCard(props: {
         md: 'none',
       }}
     >
+      {/* Render actual contract cards */}
       {props.contracts?.map((contract: any, i: number) => {
         const contractId = contract[0]
         const lang = contract[1].lang
@@ -70,6 +83,7 @@ export default function ContractsCard(props: {
                   accountId={contractId}
                   cid={cid}
                   codeHash={codeHash}
+                  key={`${contractsKey}-${contractId}`}
                 />
               </TableHeading>
               <Center>
@@ -81,6 +95,44 @@ export default function ContractsCard(props: {
           </Box>
         )
       })}
+
+      {/* Add placeholder cards to maintain consistent component height */}
+      {props.contracts &&
+        Array.from({
+          length: limit - Math.min(props.contracts.length, limit),
+        }).map((_, i) => (
+          <Box
+            key={`placeholder-${i}`}
+            borderColor={'gray.500'}
+            borderWidth={'1px'}
+            rounded={'lg'}
+            p={'4'}
+            height="300px" // Approximate height of a card with content
+            display={{ base: 'flex', md: 'none' }}
+            opacity="0.5"
+          >
+            <Stack spacing={'4'} width={'full'}>
+              <TableHeading label={'Contract'}>
+                <Text>&nbsp;</Text>
+              </TableHeading>
+              <TableHeading label={'Block Height'}>
+                <Text>&nbsp;</Text>
+              </TableHeading>
+              <TableHeading label={'Code Hash'}>
+                <Text>&nbsp;</Text>
+              </TableHeading>
+              <TableHeading label={'CID'}>
+                <Text>&nbsp;</Text>
+              </TableHeading>
+              <TableHeading label={'Approved'}>
+                <Text>&nbsp;</Text>
+              </TableHeading>
+              <Center>
+                <DefaultButton isDisabled={true}>More</DefaultButton>
+              </Center>
+            </Stack>
+          </Box>
+        ))}
     </Stack>
   )
 }
