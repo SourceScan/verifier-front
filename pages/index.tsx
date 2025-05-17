@@ -250,6 +250,7 @@ export default function Contracts(props: { query: any }) {
           <ContractsTable
             contracts={contracts}
             handleShowMore={handleShowMore}
+            currentLimit={limit}
           />
           <ContractsCards
             contracts={contracts}

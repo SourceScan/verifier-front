@@ -10,7 +10,6 @@ import {
   Thead,
   Tr,
 } from '@chakra-ui/react'
-import { useEffect, useState } from 'react'
 
 import CidLink from '../Common/CidLink'
 import DefaultTooltip from '../Common/DefaultTooltip'
@@ -19,16 +18,10 @@ import Approved from '../Contracts/Approved'
 export default function ContractsTable(props: {
   contracts: any
   handleShowMore: (_accountId: string) => void
+  currentLimit: number
 }) {
-  // Default limit
-  const [limit, setLimit] = useState(5)
-
-  // Get the limit from URL on client-side only
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const urlLimit = parseInt(urlParams.get('limit') || '5')
-    setLimit(isNaN(urlLimit) ? 5 : urlLimit)
-  }, [])
+  // Use the limit provided by the parent component
+  const limit = props.currentLimit
   return (
     <TableContainer
       borderColor={'gray.500'}
