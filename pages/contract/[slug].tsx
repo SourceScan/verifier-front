@@ -24,7 +24,6 @@ import GithubLink from '@/components/Common/GithubLink'
 import IconLink from '@/components/Common/IconLink'
 import PageHead from '@/components/Common/PageHead'
 import PageRefresh from '@/components/Common/PageRefresh'
-import { formatSourceCodePath } from '@/utils/formatPath'
 import { getDockerHubLink, getImageNameAndDigest } from '@/utils/getDockerHub'
 import axios from 'axios'
 
@@ -283,10 +282,40 @@ export default function Contract() {
                       <Link
                         href={`https://github.com/${github.owner}/${
                           github.repo
-                        }/tree/${github.sha}/${formatSourceCodePath(
-                          metadata.build_info.contract_path,
-                          'rust'
-                        )}/lib.rs`}
+                        }/blob/${github.sha}/${(() => {
+                          // Log paths for debugging
+                          console.log(
+                            'Contract path:',
+                            metadata.build_info.contract_path
+                          )
+
+                          // Get normalized path
+                          let normalizedPath = ''
+                          if (metadata.build_info.contract_path) {
+                            normalizedPath =
+                              metadata.build_info.contract_path.toString()
+                            if (normalizedPath.endsWith('/')) {
+                              normalizedPath = normalizedPath.slice(0, -1)
+                            }
+                          }
+
+                          // For Rust contracts, ensure proper path structure
+                          if (data.lang === 'rust') {
+                            if (normalizedPath.endsWith('src')) {
+                              return `${normalizedPath}/lib.rs`
+                            } else if (normalizedPath.includes('/src/')) {
+                              const parts = normalizedPath.split('/src/')
+                              return `${parts[0]}/src/lib.rs`
+                            } else {
+                              return normalizedPath
+                                ? `${normalizedPath}/src/lib.rs`
+                                : 'src/lib.rs'
+                            }
+                          } else {
+                            // For non-Rust contracts, just use the normalized path
+                            return normalizedPath
+                          }
+                        })()}`}
                         isExternal
                       >
                         <ExternalLinkIcon />
