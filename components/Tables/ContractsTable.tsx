@@ -1,6 +1,8 @@
 import { truncateStringInMiddle } from '@/utils/truncate'
 import { InfoIcon } from '@chakra-ui/icons'
 import {
+  Button,
+  HStack,
   Table,
   TableContainer,
   Tbody,
@@ -9,8 +11,10 @@ import {
   Th,
   Thead,
   Tr,
+  useColorMode,
 } from '@chakra-ui/react'
-
+import { useRouter } from 'next/router'
+import { VscCode } from 'react-icons/vsc'
 import CidLink from '../Common/CidLink'
 import DefaultTooltip from '../Common/DefaultTooltip'
 import Approved from '../Contracts/Approved'
@@ -20,6 +24,9 @@ export default function ContractsTable(props: {
   handleShowMore: (_accountId: string) => void
   currentLimit: number
 }) {
+  const router = useRouter()
+  const { colorMode } = useColorMode()
+
   // Use the limit provided by the parent component
   const limit = props.currentLimit
 
@@ -31,6 +38,11 @@ export default function ContractsTable(props: {
         .join('-')
         .substring(0, 20)
     : 'no-contracts'
+
+  const navigateToCodeView = (accountId: string) => {
+    router.push(`/code/${accountId}`)
+  }
+
   return (
     <TableContainer
       borderColor={'gray.500'}
@@ -55,14 +67,14 @@ export default function ContractsTable(props: {
             <Th width="15%" textAlign="left">
               Code Hash
             </Th>
-            <Th width="20%" textAlign="left">
+            <Th width="15%" textAlign="left">
               IPFS
             </Th>
             <Th width="10%" textAlign="left">
               Approved
             </Th>
-            <Th width="10%" textAlign="left">
-              Info
+            <Th width="15%" textAlign="left">
+              Actions
             </Th>
           </Tr>
         </Thead>
@@ -112,12 +124,33 @@ export default function ContractsTable(props: {
                   />
                 </Td>
                 <Td>
-                  <DefaultTooltip label={'Show More'} placement={'top'}>
-                    <InfoIcon
-                      cursor={'pointer'}
-                      onClick={() => props.handleShowMore(accountId)}
-                    />
-                  </DefaultTooltip>
+                  <HStack spacing={2}>
+                    <DefaultTooltip label={'View Code'} placement={'top'}>
+                      <Button
+                        size="xs"
+                        leftIcon={<VscCode />}
+                        onClick={() => navigateToCodeView(accountId)}
+                        aria-label="View Code"
+                        colorScheme={colorMode === 'dark' ? 'blue' : 'teal'}
+                        variant="outline"
+                      >
+                        Code
+                      </Button>
+                    </DefaultTooltip>
+
+                    <DefaultTooltip label={'Show More'} placement={'top'}>
+                      <Button
+                        size="xs"
+                        leftIcon={<InfoIcon />}
+                        onClick={() => props.handleShowMore(accountId)}
+                        aria-label="Show More"
+                        colorScheme={colorMode === 'dark' ? 'blue' : 'teal'}
+                        variant="outline"
+                      >
+                        Info
+                      </Button>
+                    </DefaultTooltip>
+                  </HStack>
                 </Td>
               </Tr>
             )
@@ -132,9 +165,9 @@ export default function ContractsTable(props: {
                 <Td width="30%"></Td>
                 <Td width="15%"></Td>
                 <Td width="15%"></Td>
-                <Td width="20%"></Td>
+                <Td width="15%"></Td>
                 <Td width="10%"></Td>
-                <Td width="10%"></Td>
+                <Td width="15%"></Td>
               </Tr>
             ))}
         </Tbody>

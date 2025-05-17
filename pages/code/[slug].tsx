@@ -5,6 +5,7 @@ import { formatSourceCodePath, lastSegment } from '@/utils/formatPath'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
 import { useRpcUrl } from '@/utils/near/rpc'
 import {
+  Box,
   Flex,
   HStack,
   Spinner,
@@ -144,8 +145,9 @@ export default function Code() {
         const network = networkConfig.name.toLowerCase()
 
         axios
-          .get(`${process.env.NEXT_PUBLIC_API_HOST}/api/ipfs/structure`, {
+          .get(`/api/proxy-ipfs`, {
             params: {
+              endpoint: 'structure',
               cid: data.cid,
               path: sourcePath,
             },
@@ -154,14 +156,20 @@ export default function Code() {
             },
           })
           .then((response) => {
-            setFiles(
-              response.data.structure.filter(
-                (file: any) => file.type === 'file'
-              )
-            )
+            console.log('IPFS structure response:', response.data)
+            // Ensure we handle both array and object responses
+            const structure = Array.isArray(response.data.structure)
+              ? response.data.structure
+              : response.data.structure
+              ? [response.data.structure]
+              : []
+
+            setFiles(structure.filter((file: any) => file.type === 'file'))
           })
           .catch((error) => {
-            console.log(error)
+            console.error('IPFS structure error:', error)
+            // Set empty files array on error to avoid null reference
+            setFiles([])
           })
       })
       .catch((err) => {
@@ -170,32 +178,53 @@ export default function Code() {
   }, [data, accountId, rpcUrl, networkConfig])
 
   useEffect(() => {
-    if (!files || !data) return
+    if (!files || !data || !Array.isArray(files) || files.length === 0) return
 
     // Set the default file path to be displayed
     const entryName = data.lang === 'rust' ? 'lib.rs' : ''
-    const entryFile = (files.filter((file: any) => file.name === entryName) ||
-      files)[0]
+    // Find the entry file or use the first available file
+    const filteredFiles = files.filter((file: any) => file.name === entryName)
+    const entryFile = filteredFiles.length > 0 ? filteredFiles[0] : files[0]
 
-    setSelectedFilePath(entryFile.path)
+    if (entryFile && entryFile.path) {
+      console.log('Setting selected file path:', entryFile.path)
+      setSelectedFilePath(entryFile.path)
+    } else {
+      console.error('Unable to find a valid file to display')
+      setLoading(false)
+    }
   }, [files, data])
 
   useEffect(() => {
-    if (!selectedFilePath) return
+    if (!selectedFilePath || !data || !data.cid) return
 
     // Fetch the code content from IPFS
+    // Add cid as a query parameter since it may not be included in the path
+    console.log('Fetching file content:', selectedFilePath, 'CID:', data.cid)
+
     axios
-      .get(`${process.env.NEXT_PUBLIC_API_HOST}/ipfs/${selectedFilePath}`)
+      .get(`/api/proxy-ipfs`, {
+        params: {
+          endpoint: 'file',
+          cid: data.cid,
+          path: selectedFilePath,
+        },
+        headers: {
+          'X-Network': networkConfig.name.toLowerCase(),
+        },
+      })
       .then((res) => {
-        setCodeValue(res.data)
+        console.log('File content response:', res.data)
+        setCodeValue(res.data.content || res.data)
       })
       .catch((err) => {
-        console.log(err)
+        console.error('Error fetching file content:', err)
+        setCodeValue('Error loading file content. Please try again.')
       })
       .finally(() => {
         setLoading(false)
       })
-  }, [selectedFilePath])
+  }, [selectedFilePath, data, networkConfig])
 
   const handleFileSelection = (path: string) => {
     setLoading(true)
@@ -211,42 +240,65 @@ export default function Code() {
             <Spinner size={'xl'} />
           </Flex>
         ) : data && codeValue ? (
-          <>
-            {selectedFilePath ? (
+          <Stack width="100%" pt="70px" spacing={0}>
+            {selectedFilePath && (
               <Flex
-                position={'fixed'}
-                zIndex={30}
-                top={'18px'}
-                left={{ base: '10px', lg: '40px' }}
+                width="100%"
+                justifyContent="center"
+                py={2}
+                borderBottomWidth="1px"
+                borderColor={colorMode === 'dark' ? 'gray.600' : 'gray.300'}
+                bg={colorMode === 'dark' ? 'gray.800' : 'gray.100'}
+                position="sticky"
+                top="64px"
+                zIndex={10}
+                boxShadow="sm"
               >
                 <HStack
-                  spacing={{ base: '0', lg: '2' }}
-                  border={'1px dashed'}
-                  rounded={'lg'}
-                  borderColor={'gray.500'}
-                  pr={'2'}
-                  bg="rgba(0,0,0,0.7)"
+                  spacing={{ base: '2', lg: '3' }}
+                  rounded={'md'}
+                  px={{ base: 2, md: 4 }}
+                  py={2}
+                  maxW="1200px"
+                  width="100%"
+                  ml={{ base: 2, md: 0 }}
+                  mr={{ base: 2, md: 0 }}
                 >
                   <FileSelectionDrawer
                     files={files}
                     handleFileSelection={handleFileSelection}
                     selectedFilePath={selectedFilePath}
                   />
-                  <Text fontSize={'md'}>{lastSegment(selectedFilePath)}</Text>
+                  <Text fontSize={'md'} fontWeight="medium" isTruncated>
+                    {lastSegment(selectedFilePath)}
+                  </Text>
                 </HStack>
               </Flex>
-            ) : null}
-            <Flex zIndex={20} width="100%" height="100%" direction="column">
-              <CodeMirror
-                editable={false}
-                value={codeValue}
-                height="calc(100vh - 200px)"
-                width="100%"
-                theme={colorMode}
-                extensions={[rust()]}
-              />
+            )}
+            <Flex
+              width="100%"
+              direction="column"
+              flex={1}
+              px={{ base: 0, md: 4 }}
+              py={2}
+            >
+              <Box
+                borderWidth="1px"
+                borderColor={colorMode === 'dark' ? 'gray.700' : 'gray.200'}
+                borderRadius="md"
+                overflow="hidden"
+              >
+                <CodeMirror
+                  editable={false}
+                  value={codeValue}
+                  height="calc(100vh - 150px)"
+                  width="100%"
+                  theme={colorMode}
+                  extensions={[rust()]}
+                />
+              </Box>
             </Flex>
-          </>
+          </Stack>
         ) : (
           <Flex justify="center" align="center" height="100%" width="100%">
             <Text>{accountId} not found</Text>

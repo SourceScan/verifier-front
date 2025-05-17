@@ -1,8 +1,17 @@
-import { Box, Center, Stack, Text } from '@chakra-ui/react'
+import { InfoIcon } from '@chakra-ui/icons'
+import {
+  Box,
+  Button,
+  HStack,
+  Stack,
+  Text,
+  useColorMode,
+} from '@chakra-ui/react'
+import { useRouter } from 'next/router'
+import { VscCode } from 'react-icons/vsc'
 
 import CidLink from '@/components/Common/CidLink'
 import Approved from '@/components/Contracts/Approved'
-import DefaultButton from '@/components/Inputs/DefaultButton'
 import { truncateStringInMiddle } from '@/utils/truncate'
 import TableHeading from './TableHeading'
 
@@ -11,6 +20,9 @@ export default function ContractsCard(props: {
   handleShowMore: (_accountId: string) => void
   currentLimit?: number
 }) {
+  const router = useRouter()
+  const { colorMode } = useColorMode()
+
   // Default to 5 items if not specified
   const limit = props.currentLimit || 5
 
@@ -22,6 +34,11 @@ export default function ContractsCard(props: {
         .join('-')
         .substring(0, 20)
     : 'no-contracts'
+
+  const navigateToCodeView = (accountId: string) => {
+    router.push(`/code/${accountId}`)
+  }
+
   return (
     <Stack
       w={'100%'}
@@ -86,11 +103,26 @@ export default function ContractsCard(props: {
                   key={`${contractsKey}-${contractId}`}
                 />
               </TableHeading>
-              <Center>
-                <DefaultButton onClick={() => props.handleShowMore(contractId)}>
-                  More
-                </DefaultButton>
-              </Center>
+              <HStack spacing={3} justifyContent="center">
+                <Button
+                  size="sm"
+                  leftIcon={<VscCode />}
+                  onClick={() => navigateToCodeView(contractId)}
+                  colorScheme={colorMode === 'dark' ? 'blue' : 'teal'}
+                  variant="outline"
+                >
+                  Code
+                </Button>
+                <Button
+                  size="sm"
+                  leftIcon={<InfoIcon />}
+                  onClick={() => props.handleShowMore(contractId)}
+                  colorScheme={colorMode === 'dark' ? 'blue' : 'teal'}
+                  variant="outline"
+                >
+                  Info
+                </Button>
+              </HStack>
             </Stack>
           </Box>
         )
@@ -107,7 +139,7 @@ export default function ContractsCard(props: {
             borderWidth={'1px'}
             rounded={'lg'}
             p={'4'}
-            height="300px" // Approximate height of a card with content
+            height="320px" // Slightly increased to account for new button
             display={{ base: 'flex', md: 'none' }}
             opacity="0.5"
           >
@@ -127,9 +159,26 @@ export default function ContractsCard(props: {
               <TableHeading label={'Approved'}>
                 <Text>&nbsp;</Text>
               </TableHeading>
-              <Center>
-                <DefaultButton isDisabled={true}>More</DefaultButton>
-              </Center>
+              <HStack spacing={3} justifyContent="center">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  leftIcon={<VscCode />}
+                  isDisabled={true}
+                  colorScheme={colorMode === 'dark' ? 'blue' : 'teal'}
+                >
+                  Code
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  leftIcon={<InfoIcon />}
+                  isDisabled={true}
+                  colorScheme={colorMode === 'dark' ? 'blue' : 'teal'}
+                >
+                  Info
+                </Button>
+              </HStack>
             </Stack>
           </Box>
         ))}

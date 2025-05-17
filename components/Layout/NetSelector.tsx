@@ -23,8 +23,11 @@ export default function NetSelector() {
   const handleNetworkChange = (newNetwork: NetworkType) => {
     if (newNetwork !== network) {
       setNetwork(newNetwork)
-      // Refresh the page to apply network changes
-      router.reload()
+      // Redirect to home page instead of just reloading
+      router.push('/').then(() => {
+        // Force a hard refresh to ensure clean state
+        window.location.reload()
+      })
     }
   }
 
@@ -40,7 +43,7 @@ export default function NetSelector() {
         rounded={'lg'}
         borderStyle={'dashed'}
         bg={bgColor}
-        display={router.pathname.includes('code') ? 'none' : 'flex'}
+        display={'flex'}
         rightIcon={<ChevronDownIcon display={{ base: 'none', md: 'flex' }} />}
         px={{ base: 2, md: 4 }}
         py={{ base: 1, md: 2 }}

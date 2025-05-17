@@ -65,6 +65,27 @@ const NetworkBadge: React.FC<NetworkBadgeProps> = ({
         fontSize={fontSize}
         lineHeight="1.2"
         padding={padding}
+        // Set fixed height and width based on size to prevent layout shifts
+        height={
+          resolvedSize === 'sm'
+            ? '20px'
+            : resolvedSize === 'md'
+            ? '24px'
+            : '28px'
+        }
+        minWidth={
+          resolvedShowLabel
+            ? resolvedSize === 'sm'
+              ? '60px'
+              : resolvedSize === 'md'
+              ? '70px'
+              : '80px'
+            : 'auto'
+        }
+        // Add a smooth transition to make any changes less jarring
+        transition="all 0.2s ease"
+        // Ensure consistent vertical alignment
+        verticalAlign="middle"
       >
         <Box
           w={badgeSize}
@@ -73,9 +94,11 @@ const NetworkBadge: React.FC<NetworkBadgeProps> = ({
           bg="currentColor"
           opacity={0.7}
           mr={resolvedShowLabel ? spacing : 0}
+          // Make this element fixed size as well
+          flexShrink={0}
         />
         {resolvedShowLabel && (
-          <Text fontSize={fontSize} lineHeight="1.2">
+          <Text fontSize={fontSize} lineHeight="1.2" whiteSpace="nowrap">
             {networkConfig.name}
           </Text>
         )}

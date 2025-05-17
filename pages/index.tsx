@@ -314,6 +314,13 @@ export default function Contracts(props: { query: any }) {
                       fontWeight={isSelected ? 'bold' : 'normal'}
                       bg={isSelected ? 'gray.200' : bgColor}
                       _hover={{ bg: isSelected ? 'gray.200' : bgColor }}
+                      minW="40px"
+                      w="40px"
+                      h="40px"
+                      px={0}
+                      display="flex"
+                      justifyContent="center"
+                      alignItems="center"
                     >
                       {pageIndex + 1}
                     </DefaultButton>
