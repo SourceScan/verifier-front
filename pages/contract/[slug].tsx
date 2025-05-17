@@ -46,16 +46,19 @@ export default function Contract() {
   const [ipfsAvailable, setIpfsAvailable] = useState(true)
   const [ipfsChecked, setIpfsChecked] = useState(false)
 
-  // Detect network from contract address and switch if necessary
+  // Detect network from contract address and switch if necessary (only once when accountId is available)
   useEffect(() => {
     if (accountId) {
       const detectedNetwork = detectNetworkFromAddress(accountId)
       if (detectedNetwork && detectedNetwork !== network) {
-        console.log(`Detected ${detectedNetwork} contract, switching networks`)
+        console.log(
+          `Contract page: Detected ${detectedNetwork} contract, switching networks from ${network}`
+        )
         setNetwork(detectedNetwork)
+        // No need to add network-dependent data fetching here since it's covered by other useEffects
       }
     }
-  }, [accountId, network, setNetwork])
+  }, [accountId]) // Only depend on accountId to avoid re-running when network changes
 
   useEffect(() => {
     if (!accountId || !networkConfig) return

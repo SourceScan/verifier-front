@@ -52,16 +52,9 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({
   const [network, setNetworkState] = useState<NetworkType>(DEFAULT_NETWORK)
 
   // Client-side only: Update network from localStorage after mount
-  const [isClient, setIsClient] = useState(false)
-
-  // Set isClient to true on component mount to indicate we're in the browser
   useEffect(() => {
-    setIsClient(true)
-  }, [])
-
-  // Only run this effect after the component has mounted on the client
-  useEffect(() => {
-    if (!isClient) return
+    // This should only run in the browser
+    if (typeof window === 'undefined') return
 
     try {
       // Get saved network from localStorage
@@ -77,26 +70,12 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({
     } catch (error) {
       console.warn('Failed to access localStorage:', error)
     }
-  }, [isClient])
-
-  // Set default if not already set
-  useEffect(() => {
-    // Only run in browser
-    if (typeof window === 'undefined' || typeof localStorage === 'undefined')
-      return
-
-    try {
-      // If no network is saved in localStorage, initialize it with the current state
-      if (!localStorage.getItem('network')) {
-        localStorage.setItem('network', network)
-      }
-    } catch (error) {
-      console.warn('Failed to access localStorage:', error)
-    }
-  }, [network])
+  }, [])
 
   // Save network preference to localStorage when it changes
   const setNetwork = (newNetwork: NetworkType) => {
+    if (newNetwork === network) return // Don't update if it's the same network
+
     // Update state
     setNetworkState(newNetwork)
 
@@ -104,6 +83,7 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({
     if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
       try {
         localStorage.setItem('network', newNetwork)
+        console.log(`Network switched to ${newNetwork}`)
       } catch (error) {
         console.warn('Failed to save network preference:', error)
       }

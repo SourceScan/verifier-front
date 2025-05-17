@@ -35,17 +35,19 @@ export default function Code() {
   const [codeValue, setCodeValue] = useState<any>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  // Add timeout to prevent infinite loading
-  // Detect network from contract address and switch if necessary
+  // Detect network from contract address and switch if necessary (only once when accountId is available)
   useEffect(() => {
     if (accountId) {
       const detectedNetwork = detectNetworkFromAddress(accountId)
       if (detectedNetwork && detectedNetwork !== network) {
-        console.log(`Detected ${detectedNetwork} contract, switching networks`)
+        console.log(
+          `Code page: Detected ${detectedNetwork} contract, switching networks from ${network}`
+        )
         setNetwork(detectedNetwork)
+        // No need to add network-dependent data fetching here since it's covered by other useEffects
       }
     }
-  }, [accountId, network, setNetwork])
+  }, [accountId]) // Only depend on accountId to avoid re-running when network changes
 
   useEffect(() => {
     if (!accountId || !networkConfig) return
