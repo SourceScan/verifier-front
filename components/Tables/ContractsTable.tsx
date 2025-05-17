@@ -132,7 +132,16 @@ export default function ContractsTable(props: {
                         leftIcon={<VscCode />}
                         onClick={() => navigateToCodeView(accountId)}
                         aria-label="View Code"
-                        colorScheme="blue"
+                        bg={
+                          colorMode === 'dark' ? 'transparent' : 'transparent'
+                        }
+                        color={colorMode === 'dark' ? '#E8A317' : '#228B22'}
+                        borderColor={
+                          colorMode === 'dark' ? '#E8A317' : '#228B22'
+                        }
+                        _hover={{
+                          bg: colorMode === 'dark' ? '#E8A31720' : '#228B2220',
+                        }}
                         variant="outline"
                       >
                         Code
@@ -145,7 +154,16 @@ export default function ContractsTable(props: {
                         leftIcon={<InfoIcon />}
                         onClick={() => props.handleShowMore(accountId)}
                         aria-label="Show More"
-                        colorScheme="blue"
+                        bg={
+                          colorMode === 'dark' ? 'transparent' : 'transparent'
+                        }
+                        color={colorMode === 'dark' ? '#E8A317' : '#228B22'}
+                        borderColor={
+                          colorMode === 'dark' ? '#E8A317' : '#228B22'
+                        }
+                        _hover={{
+                          bg: colorMode === 'dark' ? '#E8A31720' : '#228B2220',
+                        }}
                         variant="outline"
                       >
                         Info

@@ -108,7 +108,12 @@ export default function ContractsCard(props: {
                   size="sm"
                   leftIcon={<VscCode />}
                   onClick={() => navigateToCodeView(contractId)}
-                  colorScheme="blue"
+                  bg={colorMode === 'dark' ? 'transparent' : 'transparent'}
+                  color={colorMode === 'dark' ? '#E8A317' : '#228B22'}
+                  borderColor={colorMode === 'dark' ? '#E8A317' : '#228B22'}
+                  _hover={{
+                    bg: colorMode === 'dark' ? '#E8A31720' : '#228B2220',
+                  }}
                   variant="outline"
                 >
                   Code
@@ -117,7 +122,12 @@ export default function ContractsCard(props: {
                   size="sm"
                   leftIcon={<InfoIcon />}
                   onClick={() => props.handleShowMore(contractId)}
-                  colorScheme="blue"
+                  bg={colorMode === 'dark' ? 'transparent' : 'transparent'}
+                  color={colorMode === 'dark' ? '#E8A317' : '#228B22'}
+                  borderColor={colorMode === 'dark' ? '#E8A317' : '#228B22'}
+                  _hover={{
+                    bg: colorMode === 'dark' ? '#E8A31720' : '#228B2220',
+                  }}
                   variant="outline"
                 >
                   Info
@@ -165,7 +175,9 @@ export default function ContractsCard(props: {
                   variant="outline"
                   leftIcon={<VscCode />}
                   isDisabled={true}
-                  colorScheme="blue"
+                  bg={colorMode === 'dark' ? 'transparent' : 'transparent'}
+                  color={colorMode === 'dark' ? '#E8A31750' : '#228B2250'}
+                  borderColor={colorMode === 'dark' ? '#E8A31750' : '#228B2250'}
                 >
                   Code
                 </Button>
@@ -174,7 +186,9 @@ export default function ContractsCard(props: {
                   variant="outline"
                   leftIcon={<InfoIcon />}
                   isDisabled={true}
-                  colorScheme="blue"
+                  bg={colorMode === 'dark' ? 'transparent' : 'transparent'}
+                  color={colorMode === 'dark' ? '#E8A31750' : '#228B2250'}
+                  borderColor={colorMode === 'dark' ? '#E8A31750' : '#228B2250'}
                 >
                   Info
                 </Button>
