@@ -1,7 +1,6 @@
 import FileSelectionDrawer from '@/components/Code/FileSelectionDrawer'
 import PageHead from '@/components/Common/PageHead'
 import { useNetwork } from '@/contexts/NetworkContext'
-import { formatSourceCodePath } from '@/utils/formatPath'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
 import { useRpcUrl } from '@/utils/near/rpc'
 import { bg, color } from '@/utils/theme'
@@ -41,8 +40,6 @@ export default function Code() {
     // which is properly initialized from localStorage
     const contractAddress = networkConfig.contract
 
-    console.log('Fetching contract data for network:', networkConfig.name)
-
     // Fetch the contract data
     axios
       .post(
@@ -72,8 +69,8 @@ export default function Code() {
         const json_res = JSON.parse(str_res)
         setData(json_res)
       })
-      .catch((err) => {
-        console.log(err)
+      .catch(() => {
+        // Handle error silently
       })
   }, [accountId, rpcUrl, networkConfig])
 
@@ -101,12 +98,8 @@ export default function Code() {
         }
       )
       .then((codeRes) => {
-        // Check if code hash matches
-        if (codeRes.data.result.hash === data.code_hash) {
-          console.log('Code hash matches')
-        } else {
-          console.log('Code hash does not match')
-        }
+        // Check if code hash matches (no need to log)
+        const codeHashMatches = codeRes.data.result.hash === data.code_hash
 
         // Continue with metadata fetch
         return axios.post(
@@ -135,11 +128,8 @@ export default function Code() {
         const json_res = JSON.parse(str_res)
         setMetadata(json_res)
 
-        // Fetch file structure from IPFS based on metadata
-        const sourcePath = formatSourceCodePath(
-          json_res.build_info.contract_path,
-          data.lang
-        )
+        // Use the contract_path if available, otherwise use root path "/"
+        const sourcePath = json_res.build_info?.contract_path || '/'
 
         // Add network information to headers
         const network = networkConfig.name.toLowerCase()
@@ -156,10 +146,9 @@ export default function Code() {
             },
           })
           .then((response) => {
-            console.log('IPFS structure response:', response.data)
             // Ensure we handle both array and object responses
             // Handle different possible response structures from IPFS
-            let structure = []
+            let structure: any[] = []
             if (response.data.structure) {
               structure = Array.isArray(response.data.structure)
                 ? response.data.structure
@@ -170,18 +159,90 @@ export default function Code() {
               structure = [response.data]
             }
 
-            console.log('Processed IPFS structure:', structure)
+            // Filter to only include .rs and .toml files from the top level
+            const filteredFiles = structure.filter((file: any) => {
+              return (
+                file.type === 'file' &&
+                (file.name.endsWith('.rs') || file.name.endsWith('.toml'))
+              )
+            })
 
-            setFiles(structure.filter((file: any) => file.type === 'file'))
+            // Process folders one level deep (non-recursive to avoid too many requests)
+            const processFolders = async () => {
+              let allFiles = [...filteredFiles]
+
+              // Get all directories
+              const directories = structure.filter(
+                (item: any) => item.type === 'dir'
+              )
+
+              // Process each directory
+              for (const dir of directories) {
+                try {
+                  const folderResponse = await axios.get(`/api/proxy-ipfs`, {
+                    params: {
+                      endpoint: 'structure',
+                      cid: data.cid,
+                      path: dir.path,
+                    },
+                    headers: {
+                      'X-Network': network,
+                    },
+                  })
+
+                  // Extract folder items
+                  let folderItems: any[] = []
+                  if (folderResponse.data.structure) {
+                    folderItems = Array.isArray(folderResponse.data.structure)
+                      ? folderResponse.data.structure
+                      : [folderResponse.data.structure]
+                  } else if (Array.isArray(folderResponse.data)) {
+                    folderItems = folderResponse.data
+                  } else if (
+                    folderResponse.data &&
+                    typeof folderResponse.data === 'object'
+                  ) {
+                    folderItems = [folderResponse.data]
+                  }
+
+                  // Filter for .rs and .toml files and add them with folder prefix
+                  const folderFiles = folderItems
+                    .filter(
+                      (file: any) =>
+                        file.type === 'file' &&
+                        (file.name.endsWith('.rs') ||
+                          file.name.endsWith('.toml'))
+                    )
+                    .map((file: any) => ({
+                      ...file,
+                      displayName: `${dir.name}/${file.name}`,
+                    }))
+
+                  allFiles = [...allFiles, ...folderFiles]
+                } catch (error) {
+                  // Skip folders that can't be processed
+                }
+              }
+
+              return allFiles
+            }
+
+            // Process folders and set files
+            processFolders()
+              .then((allFiles) => {
+                setFiles(allFiles)
+              })
+              .catch(() => {
+                setFiles([])
+              })
           })
-          .catch((error) => {
-            console.error('IPFS structure error:', error)
+          .catch(() => {
             // Set empty files array on error to avoid null reference
             setFiles([])
           })
       })
-      .catch((err) => {
-        console.log(err)
+      .catch(() => {
+        // Handle error silently
       })
   }, [data, accountId, rpcUrl, networkConfig])
 
@@ -195,10 +256,9 @@ export default function Code() {
     const entryFile = filteredFiles.length > 0 ? filteredFiles[0] : files[0]
 
     if (entryFile && entryFile.path) {
-      console.log('Setting selected file path:', entryFile.path)
       setSelectedFilePath(entryFile.path)
     } else {
-      console.error('Unable to find a valid file to display')
+      // No valid file found
       setLoading(false)
     }
   }, [files, data])
@@ -207,22 +267,31 @@ export default function Code() {
     if (!selectedFilePath || !data || !data.cid) return
 
     // Fetch the code content from IPFS
-    // Add cid as a query parameter since it may not be included in the path
-    console.log('Fetching file content:', selectedFilePath, 'CID:', data.cid)
+    // Extract clean file path from the full path (which might include the CID)
+    let filePath = selectedFilePath
 
+    // If the path includes the CID, extract just the path portion
+    if (filePath.includes(data.cid)) {
+      // Extract the part after the CID
+      const cidIndex = filePath.indexOf(data.cid)
+      if (cidIndex !== -1) {
+        filePath = filePath.substring(cidIndex + data.cid.length + 1) // +1 for the slash
+      }
+    }
+
+    // With our updated proxy implementation, the endpoint will properly handle the URL construction
     axios
       .get(`/api/proxy-ipfs`, {
         params: {
           endpoint: 'file',
           cid: data.cid,
-          path: selectedFilePath,
+          path: filePath,
         },
         headers: {
           'X-Network': networkConfig.name.toLowerCase(),
         },
       })
       .then((res) => {
-        console.log('File content response:', res.data)
         // Handle different response formats
         if (res.data && typeof res.data === 'object') {
           if (res.data.content) {
@@ -237,8 +306,7 @@ export default function Code() {
           setCodeValue('Unable to parse file content properly.')
         }
       })
-      .catch((err) => {
-        console.error('Error fetching file content:', err)
+      .catch(() => {
         setCodeValue('Error loading file content. Please try again.')
       })
       .finally(() => {

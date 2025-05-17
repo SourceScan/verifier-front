@@ -1,12 +1,11 @@
 const formatSourceCodePath = (path: String, lang: String) => {
-  let segments = path.split('/')
-
-  segments.pop()
-  if (lang === 'rust') {
-    segments.push('src')
+  // If path is empty or undefined, return a safe default
+  if (!path) {
+    return ''
   }
 
-  return segments.join('/')
+  // For other contracts, use the path as is
+  return path.toString()
 }
 
 const lastSegment = (path: String) => {
