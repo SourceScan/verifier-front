@@ -1,68 +1,94 @@
-import { rpc } from '@/utils/near/rpc'
+import { useNetwork } from '@/contexts/NetworkContext'
 import { CheckIcon, CloseIcon } from '@chakra-ui/icons'
 import { Center, Spinner } from '@chakra-ui/react'
-import { useEffect, useState } from 'react'
-
-import api from '@/utils/apis/api'
 import axios from 'axios'
+import { useEffect, useState } from 'react'
 import DefaultTooltip from '../Common/DefaultTooltip'
+
+// Simple in-memory cache for approval status
+const approvalCache: Record<string, { approved: boolean; timestamp: number }> =
+  {}
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 export default function Approved(props: {
   accountId: string
   cid: string
-  deploy_tx: string
+  codeHash: string
+  key?: string // Component key for remounting
 }) {
   const [approved, setApproved] = useState<boolean | null>(null)
   const [error, setError] = useState<boolean>(false)
+  const { networkConfig } = useNetwork()
 
+  // Fetch approval status
   useEffect(() => {
-    setApproved(null)
-    setError(false)
-    axios
-      .post(rpc, {
-        jsonrpc: '2.0',
-        id: 'dontcare',
-        method: 'query',
-        params: {
-          request_type: 'view_code',
-          finality: 'final',
-          account_id: props.accountId,
-        },
-      })
-      .then((res) => {
-        axios
-          .get(
-            `${process.env.NEXT_PUBLIC_API_HOST}/ipfs/${props.cid}/wasm_code_base64`
-          )
-          .then((res2) => {
-            if (res2.data !== res.data.result.code_base64) {
-              setApproved(false)
-              return
-            } else {
-              api
-                .post('/api/ipfs/getTxHash', { cid: props.cid })
-                .then((res) => {
-                  setApproved(res.data.tx_hash === props.deploy_tx)
-                })
-                .catch((err) => {
-                  console.log(err)
-                  setError(true)
-                })
-            }
-          })
-          .catch((err) => {
-            console.log(err)
-            setError(true)
-          })
-      })
-      .catch((err) => {
-        console.log(err)
+    if (!networkConfig) return
+
+    // Create a cache key
+    const cacheKey = `${networkConfig.name.toLowerCase()}:${props.accountId}:${
+      props.codeHash
+    }`
+
+    // Check cache first
+    const cachedResult = approvalCache[cacheKey]
+    if (cachedResult && Date.now() - cachedResult.timestamp < CACHE_TTL) {
+      setApproved(cachedResult.approved)
+      return
+    }
+
+    // If not in cache, fetch from API
+    const fetchApprovalStatus = async () => {
+      try {
+        const rpcUrl = '/api/proxy-rpc'
+        const response = await axios.post(
+          rpcUrl,
+          {
+            jsonrpc: '2.0',
+            id: 'dontcare',
+            method: 'query',
+            params: {
+              request_type: 'view_code',
+              finality: 'final',
+              account_id: props.accountId,
+            },
+          },
+          {
+            headers: {
+              'X-Network': networkConfig.name.toLowerCase(),
+            },
+          }
+        )
+
+        // Check if response has the expected structure
+        if (
+          response.data &&
+          response.data.result &&
+          response.data.result.hash
+        ) {
+          const isApproved = response.data.result.hash === props.codeHash
+
+          // Update cache
+          approvalCache[cacheKey] = {
+            approved: isApproved,
+            timestamp: Date.now(),
+          }
+
+          setApproved(isApproved)
+        } else {
+          console.error('Invalid response format:', response.data)
+          setError(true)
+        }
+      } catch (error) {
+        console.error('Error fetching approval status:', error)
         setError(true)
-      })
-  }, [props.accountId, props.cid])
+      }
+    }
+
+    fetchApprovalStatus()
+  }, [props.accountId, props.codeHash, networkConfig])
 
   return (
-    <Center>
+    <Center h="24px" w="24px">
       <DefaultTooltip
         label={
           error
@@ -76,13 +102,13 @@ export default function Approved(props: {
         placement={'top'}
       >
         {error ? (
-          <CloseIcon />
+          <CloseIcon boxSize="16px" />
         ) : approved === null ? (
-          <Spinner />
+          <Spinner size="sm" thickness="2px" speed="0.65s" />
         ) : approved ? (
-          <CheckIcon />
+          <CheckIcon boxSize="16px" />
         ) : (
-          <CloseIcon />
+          <CloseIcon boxSize="16px" />
         )}
       </DefaultTooltip>
     </Center>

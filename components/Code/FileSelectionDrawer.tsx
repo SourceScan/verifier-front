@@ -1,19 +1,17 @@
-import { bg } from '@/utils/theme'
 import {
+  Box,
   Button,
-  Drawer,
-  DrawerBody,
-  DrawerContent,
-  DrawerOverlay,
-  Radio,
-  RadioGroup,
-  Stack,
+  HStack,
+  Icon,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
+  Text,
   useColorMode,
-  useDisclosure,
 } from '@chakra-ui/react'
 import React from 'react'
-import { VscListSelection } from 'react-icons/vsc'
-import DefaultTooltip from '../Common/DefaultTooltip'
+import { VscChevronDown, VscFile, VscFolder } from 'react-icons/vsc'
 
 // Define the type for the file object
 interface File {
@@ -24,7 +22,7 @@ interface File {
 // Define the props for the FileSelectionDrawer component
 interface FileSelectionDrawerProps {
   files: File[]
-  handleFileSelection: (value: string) => void
+  handleFileSelection: (_value: string) => void
   selectedFilePath: string
 }
 
@@ -33,34 +31,112 @@ const FileSelectionDrawer: React.FC<FileSelectionDrawerProps> = ({
   handleFileSelection,
   selectedFilePath,
 }) => {
-  const { isOpen, onOpen, onClose } = useDisclosure()
   const { colorMode } = useColorMode()
+  const selectedFile = files.find((file) => file.path === selectedFilePath)
+
+  // Group files by directory for better organization
+  const groupedFiles = files.reduce((acc: Record<string, File[]>, file) => {
+    const pathParts = file.path.split('/')
+    const directory = pathParts.length > 1 ? pathParts[0] : 'root'
+
+    if (!acc[directory]) {
+      acc[directory] = []
+    }
+
+    acc[directory].push(file)
+    return acc
+  }, {})
 
   return (
-    <>
-      <DefaultTooltip label={'Select File'} placement={'bottom'}>
-        <Button bg={bg[colorMode]} onClick={onOpen} rounded={'lg'} size={'sm'}>
-          <VscListSelection size={'22'} />
-        </Button>
-      </DefaultTooltip>
-
-      <Drawer isOpen={isOpen} placement={'left'} onClose={onClose}>
-        <DrawerOverlay />
-        <DrawerContent>
-          <DrawerBody bg={bg[colorMode]}>
-            <RadioGroup onChange={handleFileSelection} value={selectedFilePath}>
-              <Stack spacing={'8'} pt={'100'} bg={bg[colorMode]}>
-                {files.map((file) => (
-                  <Radio key={file.path} value={file.path}>
+    <Menu>
+      <MenuButton
+        as={Button}
+        rightIcon={<VscChevronDown />}
+        leftIcon={<VscFile />}
+        variant="outline"
+        size="md"
+        borderColor={colorMode === 'dark' ? 'gray.600' : 'gray.300'}
+        bg={colorMode === 'dark' ? 'gray.800' : 'white'}
+        _hover={{ bg: colorMode === 'dark' ? 'gray.700' : 'gray.100' }}
+        _active={{ bg: colorMode === 'dark' ? 'gray.700' : 'gray.100' }}
+        _expanded={{ bg: colorMode === 'dark' ? 'gray.700' : 'gray.100' }}
+        fontWeight="normal"
+        width={{ base: 'full', md: 'auto' }}
+      >
+        {selectedFile ? selectedFile.name : 'Select File'}
+      </MenuButton>
+      <MenuList
+        bg={colorMode === 'dark' ? 'gray.800' : 'white'}
+        borderColor={colorMode === 'dark' ? 'gray.600' : 'gray.200'}
+        boxShadow="lg"
+        zIndex={20}
+        maxH="400px"
+        overflowY="auto"
+      >
+        {Object.keys(groupedFiles).length > 1
+          ? // If we have multiple directories, show them grouped
+            Object.entries(groupedFiles).map(([directory, dirFiles]) => (
+              <Box key={directory}>
+                {directory !== 'root' && (
+                  <Box
+                    px={3}
+                    py={2}
+                    fontWeight="medium"
+                    fontSize="sm"
+                    color={colorMode === 'dark' ? 'gray.400' : 'gray.600'}
+                    borderBottomWidth="1px"
+                    borderColor={colorMode === 'dark' ? 'gray.700' : 'gray.100'}
+                  >
+                    <HStack>
+                      <Icon as={VscFolder} />
+                      <Text>{directory}</Text>
+                    </HStack>
+                  </Box>
+                )}
+                {dirFiles.map((file) => (
+                  <MenuItem
+                    key={file.path}
+                    onClick={() => handleFileSelection(file.path)}
+                    bg={
+                      selectedFilePath === file.path
+                        ? colorMode === 'dark'
+                          ? 'gray.700'
+                          : 'gray.100'
+                        : 'transparent'
+                    }
+                    _hover={{
+                      bg: colorMode === 'dark' ? 'gray.700' : 'gray.100',
+                    }}
+                    icon={<VscFile />}
+                    pl={directory !== 'root' ? 6 : 3}
+                  >
                     {file.name}
-                  </Radio>
+                  </MenuItem>
                 ))}
-              </Stack>
-            </RadioGroup>
-          </DrawerBody>
-        </DrawerContent>
-      </Drawer>
-    </>
+              </Box>
+            ))
+          : // If we only have one directory, show a flat list
+            files.map((file) => (
+              <MenuItem
+                key={file.path}
+                onClick={() => handleFileSelection(file.path)}
+                bg={
+                  selectedFilePath === file.path
+                    ? colorMode === 'dark'
+                      ? 'gray.700'
+                      : 'gray.100'
+                    : 'transparent'
+                }
+                _hover={{
+                  bg: colorMode === 'dark' ? 'gray.700' : 'gray.100',
+                }}
+                icon={<VscFile />}
+              >
+                {file.name}
+              </MenuItem>
+            ))}
+      </MenuList>
+    </Menu>
   )
 }
 
