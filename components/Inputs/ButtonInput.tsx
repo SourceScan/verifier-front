@@ -2,7 +2,7 @@ import { Flex, Input, Text } from '@chakra-ui/react'
 import { RefObject, useEffect, useRef } from 'react'
 
 export default function ButtonInput(props: {
-  handleChange: (ref: RefObject<HTMLInputElement>) => void
+  handleChange: (_ref: RefObject<HTMLInputElement>) => void
   children: string
 }) {
   const ref = useRef<HTMLInputElement>(null)

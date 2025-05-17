@@ -8,7 +8,7 @@ import TableHeading from './TableHeading'
 
 export default function ContractsCard(props: {
   contracts: any
-  handleShowMore: (accountId: string) => void
+  handleShowMore: (_accountId: string) => void
 }) {
   return (
     <Stack
@@ -21,7 +21,7 @@ export default function ContractsCard(props: {
       }}
     >
       {props.contracts?.map((contract: any, i: number) => {
-        const accountId = contract[0]
+        const contractId = contract[0]
         const lang = contract[1].lang
         const blockHeight = contract[1].block_height
         const codeHash = contract[1].code_hash
@@ -38,7 +38,7 @@ export default function ContractsCard(props: {
           >
             <Stack spacing={'4'} width={'full'}>
               <TableHeading label={'Contract'}>
-                <Text textAlign={'end'}>{accountId}</Text>
+                <Text textAlign={'end'}>{contractId}</Text>
               </TableHeading>
               <TableHeading label={'Lang'}>
                 <Text textAlign={'end'}>{lang}</Text>
@@ -55,10 +55,14 @@ export default function ContractsCard(props: {
                 <CidLink cid={cid} isTruncated />
               </TableHeading>
               <TableHeading label={'Approved'}>
-                <Approved accountId={accountId} cid={cid} codeHash={codeHash} />
+                <Approved
+                  accountId={contractId}
+                  cid={cid}
+                  codeHash={codeHash}
+                />
               </TableHeading>
               <Center>
-                <DefaultButton onClick={() => props.handleShowMore(accountId)}>
+                <DefaultButton onClick={() => props.handleShowMore(contractId)}>
                   More
                 </DefaultButton>
               </Center>

@@ -1,5 +1,11 @@
+import ContractsCards from '@/components/Cards/Contracts/ContractsCards'
+import DefaultTooltip from '@/components/Common/DefaultTooltip'
 import PageHead from '@/components/Common/PageHead'
 import PageRefresh from '@/components/Common/PageRefresh'
+import DefaultButton from '@/components/Inputs/DefaultButton'
+import DefaultSelect from '@/components/Inputs/DefaultSelect'
+import ContractsTable from '@/components/Tables/ContractsTable'
+import { useNetwork } from '@/contexts/NetworkContext'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
 import { rpc } from '@/utils/near/rpc'
 import { range } from '@/utils/range'
@@ -13,16 +19,10 @@ import {
   Text,
   useColorModeValue,
 } from '@chakra-ui/react'
+import axios from 'axios'
 import { NextPageContext } from 'next'
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
-
-import ContractsCards from '@/components/Cards/Contracts/ContractsCards'
-import DefaultTooltip from '@/components/Common/DefaultTooltip'
-import DefaultButton from '@/components/Inputs/DefaultButton'
-import DefaultSelect from '@/components/Inputs/DefaultSelect'
-import ContractsTable from '@/components/Tables/ContractsTable'
-import axios from 'axios'
 
 const limits = [5, 10, 50, 100]
 
@@ -32,12 +32,14 @@ Contracts.getInitialProps = async (ctx: NextPageContext) => {
 
 export default function Contracts(props: { query: any }) {
   const router = useRouter()
+  const { networkConfig } = useNetwork()
 
   const [contracts, setContracts] = useState<any>(null)
   const [from_index, setFromIndex] = useState<number>(0)
   const [limit, setLimit] = useState<number>(10)
   const [pages, setPages] = useState<number | null>(null)
   const [selectedPage, setSelectedPage] = useState<number>(1)
+  const [search, setSearch] = useState<string>('')
 
   useEffect(() => {
     setSearch(props.query?.search || '')
@@ -61,7 +63,7 @@ export default function Contracts(props: { query: any }) {
           params: {
             request_type: 'call_function',
             finality: 'final',
-            account_id: process.env.NEXT_PUBLIC_CONTRACT,
+            account_id: networkConfig.contract,
             method_name: 'get_contracts',
             args_base64: Buffer.from(
               `{"from_index": ${from_index}, "limit": ${limit}}`
@@ -85,9 +87,8 @@ export default function Contracts(props: { query: any }) {
           console.log(err)
         })
     else handleSearch()
-  }, [from_index, limit])
+  }, [from_index, limit, search, networkConfig.contract, router.pathname])
 
-  const [search, setSearch] = useState<string>('')
   const handleSearchChange = (e: any) => {
     setSearch(e.target.value)
   }
@@ -105,7 +106,7 @@ export default function Contracts(props: { query: any }) {
         params: {
           request_type: 'call_function',
           finality: 'final',
-          account_id: process.env.NEXT_PUBLIC_CONTRACT,
+          account_id: networkConfig.contract,
           method_name: 'search',
           args_base64: Buffer.from(
             `{"key": "${search}", "from_index": ${from_index}, "limit": ${limit}}`

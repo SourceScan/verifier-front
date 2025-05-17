@@ -304,9 +304,10 @@ export default function Contract() {
                     {metadata.build_info.build_environment ? (
                       <Stack>
                         {(() => {
-                          const { imageName, digest } = getImageNameAndDigest(
-                            metadata.build_info.build_environment
-                          )
+                          const { imageName, digest: _digest } =
+                            getImageNameAndDigest(
+                              metadata.build_info.build_environment
+                            )
                           return (
                             <>
                               <HStack>

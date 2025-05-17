@@ -1,6 +1,5 @@
 import FileSelectionDrawer from '@/components/Code/FileSelectionDrawer'
 import PageHead from '@/components/Common/PageHead'
-import api from '@/utils/apis/api'
 import { formatSourceCodePath, lastSegment } from '@/utils/formatPath'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
 import { rpc } from '@/utils/near/rpc'
@@ -25,7 +24,7 @@ export default function Code() {
 
   const [loading, setLoading] = useState<boolean>(true)
   const [data, setData] = useState<any>(null)
-  const [metadata, setMetadata] = useState<any>(null)
+  const [_metadata, setMetadata] = useState<any>(null)
   const [files, setFiles] = useState<any>(null)
   const [selectedFilePath, setSelectedFilePath] = useState<any>(null)
   const [codeValue, setCodeValue] = useState<any>(null)
@@ -86,20 +85,34 @@ export default function Code() {
           json_res.build_info.contract_path,
           data.lang
         )
-        api
-          .get('/api/ipfs/structure', {
+
+        // Add network information to headers
+        const network =
+          typeof window !== 'undefined'
+            ? localStorage.getItem('network') ||
+              process.env.NEXT_PUBLIC_NETWORK ||
+              'testnet'
+            : process.env.NEXT_PUBLIC_NETWORK || 'testnet'
+
+        axios
+          .get(`${process.env.NEXT_PUBLIC_API_HOST}/api/ipfs/structure`, {
             params: {
               cid: data.cid,
               path: sourcePath,
             },
+            headers: {
+              'X-Network': network,
+            },
           })
-          .then((res) => {
+          .then((response) => {
             setFiles(
-              res.data.structure.filter((file: any) => file.type === 'file')
+              response.data.structure.filter(
+                (file: any) => file.type === 'file'
+              )
             )
           })
-          .catch((err) => {
-            console.log(err)
+          .catch((error) => {
+            console.log(error)
           })
       })
       .catch((err) => {

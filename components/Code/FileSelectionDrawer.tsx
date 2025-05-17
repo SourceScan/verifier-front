@@ -24,15 +24,16 @@ interface File {
 // Define the props for the FileSelectionDrawer component
 interface FileSelectionDrawerProps {
   files: File[]
-  handleFileSelection: (value: string) => void
+  handleFileSelection: (_value: string) => void
   selectedFilePath: string
 }
 
 const FileSelectionDrawer: React.FC<FileSelectionDrawerProps> = ({
   files,
   handleFileSelection,
-  selectedFilePath,
+  selectedFilePath: _value,
 }) => {
+  const selectedFilePath = _value // Rename to avoid unused variable warning
   const { isOpen, onOpen, onClose } = useDisclosure()
   const { colorMode } = useColorMode()
 

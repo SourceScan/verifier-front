@@ -16,7 +16,7 @@ import Approved from '../Contracts/Approved'
 
 export default function ContractsTable(props: {
   contracts: any
-  handleShowMore: (accountId: string) => void
+  handleShowMore: (_accountId: string) => void
 }) {
   return (
     <TableContainer
