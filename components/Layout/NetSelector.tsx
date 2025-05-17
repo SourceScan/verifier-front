@@ -23,11 +23,9 @@ export default function NetSelector() {
   const handleNetworkChange = (newNetwork: NetworkType) => {
     if (newNetwork !== network) {
       setNetwork(newNetwork)
-      // Redirect to home page instead of just reloading
-      router.push('/').then(() => {
-        // Force a hard refresh to ensure clean state
-        window.location.reload()
-      })
+      // Just redirect to home page without forcing a refresh
+      // The skeletons will handle the loading state
+      router.push('/')
     }
   }
 

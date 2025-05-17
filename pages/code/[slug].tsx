@@ -263,12 +263,7 @@ export default function Code() {
             direction="column"
             gap={4}
           >
-            <Spinner
-              size="xl"
-              thickness="4px"
-              speed="0.8s"
-              color={colorMode === 'dark' ? 'blue.400' : 'teal.500'}
-            />
+            <Spinner size="xl" thickness="4px" speed="0.8s" color="blue.400" />
             <Text
               fontSize="lg"
               fontWeight="medium"

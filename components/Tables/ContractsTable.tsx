@@ -132,7 +132,7 @@ export default function ContractsTable(props: {
                         leftIcon={<VscCode />}
                         onClick={() => navigateToCodeView(accountId)}
                         aria-label="View Code"
-                        colorScheme={colorMode === 'dark' ? 'blue' : 'teal'}
+                        colorScheme="blue"
                         variant="outline"
                       >
                         Code
@@ -145,7 +145,7 @@ export default function ContractsTable(props: {
                         leftIcon={<InfoIcon />}
                         onClick={() => props.handleShowMore(accountId)}
                         aria-label="Show More"
-                        colorScheme={colorMode === 'dark' ? 'blue' : 'teal'}
+                        colorScheme="blue"
                         variant="outline"
                       >
                         Info

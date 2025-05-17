@@ -108,7 +108,7 @@ export default function ContractsCard(props: {
                   size="sm"
                   leftIcon={<VscCode />}
                   onClick={() => navigateToCodeView(contractId)}
-                  colorScheme={colorMode === 'dark' ? 'blue' : 'teal'}
+                  colorScheme="blue"
                   variant="outline"
                 >
                   Code
@@ -117,7 +117,7 @@ export default function ContractsCard(props: {
                   size="sm"
                   leftIcon={<InfoIcon />}
                   onClick={() => props.handleShowMore(contractId)}
-                  colorScheme={colorMode === 'dark' ? 'blue' : 'teal'}
+                  colorScheme="blue"
                   variant="outline"
                 >
                   Info
@@ -165,7 +165,7 @@ export default function ContractsCard(props: {
                   variant="outline"
                   leftIcon={<VscCode />}
                   isDisabled={true}
-                  colorScheme={colorMode === 'dark' ? 'blue' : 'teal'}
+                  colorScheme="blue"
                 >
                   Code
                 </Button>
@@ -174,7 +174,7 @@ export default function ContractsCard(props: {
                   variant="outline"
                   leftIcon={<InfoIcon />}
                   isDisabled={true}
-                  colorScheme={colorMode === 'dark' ? 'blue' : 'teal'}
+                  colorScheme="blue"
                 >
                   Info
                 </Button>
