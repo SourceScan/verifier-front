@@ -1,3 +1,4 @@
+import { NetworkProvider } from '@/contexts/NetworkContext'
 import { theme } from '@/utils/theme'
 import { ChakraProvider, cookieStorageManagerSSR } from '@chakra-ui/react'
 import type { AppProps } from 'next/app'
@@ -13,9 +14,11 @@ export default function App({ Component, pageProps }: AppProps) {
     <>
       <NextNProgress showOnShallow={true} color={'gray'} />
       <ChakraProvider theme={theme} colorModeManager={colorModeManager}>
-        <Layout>
-          <Component {...pageProps} />
-        </Layout>
+        <NetworkProvider>
+          <Layout>
+            <Component {...pageProps} />
+          </Layout>
+        </NetworkProvider>
       </ChakraProvider>
     </>
   )

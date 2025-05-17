@@ -39,10 +39,7 @@ export default function Navbar() {
             align={'center'}
             justify={'center'}
             textAlign={'center'}
-            display={{
-              base: router.pathname.includes('code') ? 'none' : 'flex',
-              lg: 'flex',
-            }}
+            display={'flex'}
           >
             <NextLink href="/">
               <Flex>

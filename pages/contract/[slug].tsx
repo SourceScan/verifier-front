@@ -1,7 +1,8 @@
 import { GithubDto } from '@/Interfaces/github/github.dto'
+import { useNetwork } from '@/contexts/NetworkContext'
 import { extractGitHubDetails } from '@/utils/extractGithub'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
-import { rpc } from '@/utils/near/rpc'
+import { useRpcUrl } from '@/utils/near/rpc'
 import { CheckIcon, CloseIcon, ExternalLinkIcon } from '@chakra-ui/icons'
 import {
   Flex,
@@ -31,6 +32,8 @@ export default function Contract() {
   const toast = useToast()
   const router = useRouter()
   const accountId = router.query.slug as string
+  const { networkConfig } = useNetwork()
+  const rpcUrl = useRpcUrl()
 
   const [data, setData] = useState<any>(null)
   const [metadata, setMetadata] = useState<any>(null)
@@ -41,23 +44,38 @@ export default function Contract() {
   const [loadingLinks, setLoadingLinks] = useState(true)
 
   useEffect(() => {
-    if (!accountId) return
+    if (!accountId || !networkConfig) return
+
+    // Determine which contract to use based on the network
+    const contractAddress =
+      typeof window !== 'undefined' &&
+      localStorage.getItem('network') === 'testnet'
+        ? process.env.NEXT_PUBLIC_CONTRACT_TESTNET
+        : process.env.NEXT_PUBLIC_CONTRACT_MAINNET
 
     axios
-      .post(rpc, {
-        jsonrpc: '2.0',
-        id: 'dontcare',
-        method: 'query',
-        params: {
-          request_type: 'call_function',
-          finality: 'final',
-          account_id: process.env.NEXT_PUBLIC_CONTRACT,
-          method_name: 'get_contract',
-          args_base64: Buffer.from(`{"account_id": "${accountId}"}`).toString(
-            'base64'
-          ),
+      .post(
+        rpcUrl,
+        {
+          jsonrpc: '2.0',
+          id: 'dontcare',
+          method: 'query',
+          params: {
+            request_type: 'call_function',
+            finality: 'final',
+            account_id: contractAddress,
+            method_name: 'get_contract',
+            args_base64: Buffer.from(`{"account_id": "${accountId}"}`).toString(
+              'base64'
+            ),
+          },
         },
-      })
+        {
+          headers: {
+            'X-Network': networkConfig.name.toLowerCase(),
+          },
+        }
+      )
       .then((res) => {
         const str_res = ascii_to_str(res.data.result.result)
         const json_res = JSON.parse(str_res)
@@ -66,22 +84,30 @@ export default function Contract() {
       .catch((err) => {
         console.log(err)
       })
-  }, [accountId])
+  }, [accountId, rpcUrl, networkConfig])
 
   useEffect(() => {
-    if (!data) return
+    if (!data || !networkConfig) return
 
     axios
-      .post(rpc, {
-        jsonrpc: '2.0',
-        id: 'dontcare',
-        method: 'query',
-        params: {
-          request_type: 'view_code',
-          finality: 'final',
-          account_id: accountId,
+      .post(
+        rpcUrl,
+        {
+          jsonrpc: '2.0',
+          id: 'dontcare',
+          method: 'query',
+          params: {
+            request_type: 'view_code',
+            finality: 'final',
+            account_id: accountId,
+          },
         },
-      })
+        {
+          headers: {
+            'X-Network': networkConfig.name.toLowerCase(),
+          },
+        }
+      )
       .then((res) => {
         setWasmMatch(res.data.result.hash === data.code_hash)
       })
@@ -91,18 +117,26 @@ export default function Contract() {
       })
 
     axios
-      .post(rpc, {
-        jsonrpc: '2.0',
-        id: 'dontcare',
-        method: 'query',
-        params: {
-          request_type: 'call_function',
-          finality: 'final',
-          account_id: accountId,
-          method_name: 'contract_source_metadata',
-          args_base64: '',
+      .post(
+        rpcUrl,
+        {
+          jsonrpc: '2.0',
+          id: 'dontcare',
+          method: 'query',
+          params: {
+            request_type: 'call_function',
+            finality: 'final',
+            account_id: accountId,
+            method_name: 'contract_source_metadata',
+            args_base64: '',
+          },
         },
-      })
+        {
+          headers: {
+            'X-Network': networkConfig.name.toLowerCase(),
+          },
+        }
+      )
       .then((res) => {
         const str_res = ascii_to_str(res.data.result.result)
         const json_res = JSON.parse(str_res)
@@ -121,7 +155,7 @@ export default function Contract() {
       .finally(() => {
         setLoadingLinks(false)
       })
-  }, [data, accountId])
+  }, [data, accountId, rpcUrl, networkConfig])
 
   useEffect(() => {
     if (!wasmError) return
@@ -134,7 +168,7 @@ export default function Contract() {
       isClosable: true,
       position: 'bottom',
     })
-  }, [wasmError])
+  }, [wasmError, toast])
 
   useEffect(() => {
     if (!txError) return
@@ -147,7 +181,7 @@ export default function Contract() {
       isClosable: true,
       position: 'bottom',
     })
-  }, [txError])
+  }, [txError, toast])
 
   return (
     <>
@@ -165,7 +199,7 @@ export default function Contract() {
               align={{ base: 'center', md: 'start' }}
               justify={{ base: 'center', md: 'start' }}
               spacing={'10'}
-              w={{ base: '80%', md: '45%' }}
+              w={{ base: '100%', md: '80%', lg: '60%' }}
             >
               <HStack spacing={'1'}>
                 <Heading fontSize={'lg'}>{accountId}</Heading>
@@ -304,9 +338,10 @@ export default function Contract() {
                     {metadata.build_info.build_environment ? (
                       <Stack>
                         {(() => {
-                          const { imageName, digest } = getImageNameAndDigest(
-                            metadata.build_info.build_environment
-                          )
+                          const { imageName, digest: _digest } =
+                            getImageNameAndDigest(
+                              metadata.build_info.build_environment
+                            )
                           return (
                             <>
                               <HStack>

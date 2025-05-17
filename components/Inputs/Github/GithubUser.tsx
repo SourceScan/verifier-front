@@ -1,5 +1,10 @@
-import { User } from '@/Interfaces/github/user'
 import { Avatar, HStack, Heading } from '@chakra-ui/react'
+
+// Define User interface locally
+interface User {
+  name: string
+  avatar: string
+}
 
 export default function GithubUser(props: { user: User }) {
   return (

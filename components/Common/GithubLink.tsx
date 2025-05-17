@@ -1,5 +1,4 @@
 import { GithubDto } from '@/Interfaces/github/github.dto'
-import { User } from '@/Interfaces/github/user'
 import { truncateStringInMiddle } from '@/utils/truncate'
 import { ChevronDownIcon } from '@chakra-ui/icons'
 import {
@@ -10,25 +9,34 @@ import {
   Skeleton,
   Stack,
 } from '@chakra-ui/react'
+import axios from 'axios'
 import { useEffect, useState } from 'react'
 
+// Define User interface locally since it's only used here
+interface User {
+  name: string
+  avatar: string
+}
+
 import GithubUser from '@/components/Inputs/Github/GithubUser'
-import github from '@/utils/apis/github'
 import IconLink from './IconLink'
 
 export default function GithubLink(props: { github: GithubDto }) {
   const [user, setUser] = useState<User | null>(null)
   useEffect(() => {
-    github
-      .get(`/repos/${props.github.owner}/${props.github.repo}`)
-      .then((res) => {
+    // Get user information from GitHub API
+    axios
+      .get(
+        `https://api.github.com/repos/${props.github.owner}/${props.github.repo}`
+      )
+      .then((response) => {
         setUser({
-          name: res.data.owner.login,
-          avatar: res.data.owner.avatar_url,
+          name: response.data.owner.login,
+          avatar: response.data.owner.avatar_url,
         })
       })
-      .catch((err) => {
-        console.log(err)
+      .catch((error) => {
+        console.log(error)
       })
   }, [props.github])
 
