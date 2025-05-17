@@ -135,10 +135,10 @@ export default function ContractsTable(props: {
                         onClick={() => navigateToCodeView(accountId)}
                         aria-label="View Code"
                         bg="transparent"
-                        color={networkConfig.backgroundColor}
-                        borderColor={networkConfig.backgroundColor}
+                        color={networkConfig.accentColor}
+                        borderColor={networkConfig.accentColor}
                         _hover={{
-                          bg: `${networkConfig.backgroundColor}20`,
+                          bg: `${networkConfig.accentColor}20`,
                         }}
                         variant="outline"
                       >
@@ -153,10 +153,10 @@ export default function ContractsTable(props: {
                         onClick={() => props.handleShowMore(accountId)}
                         aria-label="Show More"
                         bg="transparent"
-                        color={networkConfig.backgroundColor}
-                        borderColor={networkConfig.backgroundColor}
+                        color={networkConfig.accentColor}
+                        borderColor={networkConfig.accentColor}
                         _hover={{
-                          bg: `${networkConfig.backgroundColor}20`,
+                          bg: `${networkConfig.accentColor}20`,
                         }}
                         variant="outline"
                       >

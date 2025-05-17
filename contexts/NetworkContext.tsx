@@ -17,6 +17,7 @@ export const NETWORKS = {
       process.env.NEXT_PUBLIC_CONTRACT_TESTNET ||
       'v2-verifier.sourcescan.testnet',
     backgroundColor: '#E8A317', // Darker amber that matches the theme
+    accentColor: '#D49212', // Slightly darker amber for accent elements
     textColor: '#FFFFFF',
     rpcUrl: 'https://rpc.testnet.near.org',
     explorerUrl: 'https://explorer.testnet.near.org',
@@ -26,6 +27,7 @@ export const NETWORKS = {
     contract:
       process.env.NEXT_PUBLIC_CONTRACT_MAINNET || 'v2-verifier.sourcescan.near',
     backgroundColor: '#228B22', // Forest green that matches the theme
+    accentColor: '#1B7A1B', // Slightly darker green for accent elements
     textColor: '#FFFFFF',
     rpcUrl: 'https://rpc.mainnet.near.org',
     explorerUrl: 'https://explorer.near.org',

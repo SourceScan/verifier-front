@@ -330,15 +330,13 @@ export default function Contracts(props: { query: any }) {
                       borderStyle={'dashed'}
                       fontWeight={isSelected ? 'bold' : 'normal'}
                       bg={bgColor}
-                      color={
-                        isSelected ? networkConfig.backgroundColor : undefined
-                      }
+                      color={isSelected ? networkConfig.accentColor : undefined}
                       borderColor={
-                        isSelected ? networkConfig.backgroundColor : '#748094'
+                        isSelected ? networkConfig.accentColor : '#748094'
                       }
                       _hover={{
-                        bg: `${networkConfig.backgroundColor}10`,
-                        borderColor: networkConfig.backgroundColor,
+                        bg: `${networkConfig.accentColor}10`,
+                        borderColor: networkConfig.accentColor,
                       }}
                       minW="40px"
                       w="40px"

@@ -267,7 +267,7 @@ export default function Code() {
               size="xl"
               thickness="4px"
               speed="0.8s"
-              color={networkConfig.backgroundColor}
+              color={networkConfig.accentColor}
             />
             <Text
               fontSize="lg"

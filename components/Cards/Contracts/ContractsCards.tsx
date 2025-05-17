@@ -111,10 +111,10 @@ export default function ContractsCard(props: {
                   leftIcon={<VscCode />}
                   onClick={() => navigateToCodeView(contractId)}
                   bg="transparent"
-                  color={networkConfig.backgroundColor}
-                  borderColor={networkConfig.backgroundColor}
+                  color={networkConfig.accentColor}
+                  borderColor={networkConfig.accentColor}
                   _hover={{
-                    bg: `${networkConfig.backgroundColor}20`,
+                    bg: `${networkConfig.accentColor}20`,
                   }}
                   variant="outline"
                 >
@@ -125,10 +125,10 @@ export default function ContractsCard(props: {
                   leftIcon={<InfoIcon />}
                   onClick={() => props.handleShowMore(contractId)}
                   bg="transparent"
-                  color={networkConfig.backgroundColor}
-                  borderColor={networkConfig.backgroundColor}
+                  color={networkConfig.accentColor}
+                  borderColor={networkConfig.accentColor}
                   _hover={{
-                    bg: `${networkConfig.backgroundColor}20`,
+                    bg: `${networkConfig.accentColor}20`,
                   }}
                   variant="outline"
                 >
@@ -178,8 +178,8 @@ export default function ContractsCard(props: {
                   leftIcon={<VscCode />}
                   isDisabled={true}
                   bg="transparent"
-                  color={`${networkConfig.backgroundColor}50`}
-                  borderColor={`${networkConfig.backgroundColor}50`}
+                  color={`${networkConfig.accentColor}50`}
+                  borderColor={`${networkConfig.accentColor}50`}
                 >
                   Code
                 </Button>
@@ -189,8 +189,8 @@ export default function ContractsCard(props: {
                   leftIcon={<InfoIcon />}
                   isDisabled={true}
                   bg="transparent"
-                  color={`${networkConfig.backgroundColor}50`}
-                  borderColor={`${networkConfig.backgroundColor}50`}
+                  color={`${networkConfig.accentColor}50`}
+                  borderColor={`${networkConfig.accentColor}50`}
                 >
                   Info
                 </Button>
