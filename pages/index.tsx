@@ -42,6 +42,7 @@ export default function Contracts(props: { query: any }) {
   const [pages, setPages] = useState<number | null>(null)
   const [selectedPage, setSelectedPage] = useState<number>(1)
   const [search, setSearch] = useState<string>('')
+  const [isLoading, setIsLoading] = useState<boolean>(false)
 
   useEffect(() => {
     setSearch(props.query?.search || '')
@@ -61,6 +62,9 @@ export default function Contracts(props: { query: any }) {
       console.error('Network configuration or contract address is missing')
       return
     }
+
+    // Set loading state when starting a new request
+    setIsLoading(true)
 
     if (search === '')
       axios
@@ -87,6 +91,9 @@ export default function Contracts(props: { query: any }) {
           }
         )
         .then((res) => {
+          // Clear loading state
+          setIsLoading(false)
+
           if (!res.data || !res.data.result || !res.data.result.result) {
             console.error('Invalid response format:', res.data)
             return
@@ -116,6 +123,7 @@ export default function Contracts(props: { query: any }) {
         })
         .catch((err) => {
           console.error('Error fetching contracts:', err)
+          setIsLoading(false)
         })
     else handleSearch()
   }, [from_index, limit, search, networkConfig, router.pathname, rpcUrl])
@@ -134,6 +142,9 @@ export default function Contracts(props: { query: any }) {
       console.error('Network configuration or contract address is missing')
       return
     }
+
+    // Set loading state when starting a search
+    setIsLoading(true)
 
     axios
       .post(
@@ -159,6 +170,9 @@ export default function Contracts(props: { query: any }) {
         }
       )
       .then((res) => {
+        // Clear loading state
+        setIsLoading(false)
+
         if (!res.data || !res.data.result || !res.data.result.result) {
           console.error('Invalid response format:', res.data)
           return
@@ -188,6 +202,7 @@ export default function Contracts(props: { query: any }) {
       })
       .catch((err) => {
         console.error('Error searching contracts:', err)
+        setIsLoading(false)
       })
   }
 
@@ -255,6 +270,7 @@ export default function Contracts(props: { query: any }) {
           <ContractsCards
             contracts={contracts}
             handleShowMore={handleShowMore}
+            currentLimit={limit}
           />
           <Text display={contracts?.length !== 0 ? 'none' : 'flex'}>
             Nothing here...
