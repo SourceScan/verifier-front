@@ -32,6 +32,22 @@ export default function Code() {
   const [files, setFiles] = useState<any>(null)
   const [selectedFilePath, setSelectedFilePath] = useState<any>(null)
   const [codeValue, setCodeValue] = useState<any>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  // Add timeout to prevent infinite loading
+  useEffect(() => {
+    if (!accountId || !networkConfig) return
+
+    // Create a timeout to ensure loading isn't stuck
+    const timeoutId = setTimeout(() => {
+      if (loading) {
+        console.log('Loading timeout triggered after 15 seconds')
+        setLoading(false)
+      }
+    }, 15000) // 15 second timeout
+
+    return () => clearTimeout(timeoutId)
+  }, [loading, accountId, networkConfig])
 
   useEffect(() => {
     if (!accountId || !networkConfig) return
@@ -69,8 +85,11 @@ export default function Code() {
         const json_res = JSON.parse(str_res)
         setData(json_res)
       })
-      .catch(() => {
-        // Handle error silently
+      .catch((err) => {
+        // Show error and stop loading
+        console.error('Error fetching contract data:', err)
+        setErrorMessage(`Failed to load contract data: ${err.message}`)
+        setLoading(false)
       })
   }, [accountId, rpcUrl, networkConfig])
 
@@ -236,13 +255,20 @@ export default function Code() {
                 setFiles([])
               })
           })
-          .catch(() => {
-            // Set empty files array on error to avoid null reference
+          .catch((err) => {
+            // Log the error and set empty files array
+            console.error('Error fetching IPFS structure:', err)
+            setErrorMessage(
+              `IPFS error: ${err.message || 'Failed to access IPFS'}`
+            )
             setFiles([])
           })
       })
-      .catch(() => {
-        // Handle error silently
+      .catch((err) => {
+        // Handle error and stop loading
+        console.error('Error fetching metadata:', err)
+        setErrorMessage(`Failed to fetch contract metadata: ${err.message}`)
+        setLoading(false)
       })
   }, [data, accountId, rpcUrl, networkConfig])
 
@@ -427,8 +453,48 @@ export default function Code() {
             </Box>
           </Stack>
         ) : (
-          <Flex justify="center" align="center" height="100%" width="100%">
-            <Text>{accountId} not found</Text>
+          <Flex
+            justify="center"
+            align="center"
+            height="calc(100vh - 200px)"
+            width="100%"
+            direction="column"
+            gap={4}
+          >
+            <Text
+              fontSize="lg"
+              fontWeight="medium"
+              textAlign="center"
+              color="red.500"
+            >
+              {!data
+                ? `Contract "${accountId}" not found`
+                : !files || files.length === 0
+                ? "No source code files available. IPFS may be unavailable or the contract's source code is not published."
+                : 'Failed to load contract source code'}
+            </Text>
+            {/* Display the specific error message if any */}
+            {errorMessage && (
+              <Text
+                fontSize="md"
+                color="gray.500"
+                textAlign="center"
+                maxW="600px"
+              >
+                {errorMessage}
+              </Text>
+            )}
+            {data && (
+              <Text
+                fontSize="md"
+                color="gray.500"
+                textAlign="center"
+                maxW="600px"
+              >
+                Try refreshing the page or check if the contract has its source
+                code published on IPFS.
+              </Text>
+            )}
           </Flex>
         )}
       </Stack>

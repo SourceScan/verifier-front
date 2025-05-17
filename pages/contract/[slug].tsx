@@ -41,6 +41,9 @@ export default function Contract() {
   const [txError, setTxError] = useState<string | null>(null)
   const [github, setGithub] = useState<GithubDto | null>(null)
   const [loadingLinks, setLoadingLinks] = useState(true)
+  const [githubAvailable, setGithubAvailable] = useState(true)
+  const [ipfsAvailable, setIpfsAvailable] = useState(true)
+  const [ipfsChecked, setIpfsChecked] = useState(false)
 
   useEffect(() => {
     if (!accountId || !networkConfig) return
@@ -108,7 +111,13 @@ export default function Contract() {
         }
       )
       .then((res) => {
-        setWasmMatch(res.data.result.hash === data.code_hash)
+        // Add proper null checking to prevent "Cannot read properties of undefined" error
+        if (res.data && res.data.result && res.data.result.hash) {
+          setWasmMatch(res.data.result.hash === data.code_hash)
+        } else {
+          setWasmError('Could not retrieve code hash from the blockchain')
+          setWasmMatch(false)
+        }
       })
       .catch((err) => {
         setWasmError(err.message)
@@ -141,12 +150,22 @@ export default function Contract() {
         const json_res = JSON.parse(str_res)
         setMetadata(json_res)
 
+        console.log('Metadata loaded:', json_res)
+
         try {
+          console.log(
+            'Source code snapshot:',
+            json_res.build_info?.source_code_snapshot || 'none'
+          )
           const github = extractGitHubDetails(
             json_res.build_info.source_code_snapshot
           )
+          console.log('GitHub details extracted:', github)
           github && setGithub(github)
-        } catch (e) {}
+        } catch (e) {
+          console.error('Failed to extract GitHub details:', e)
+          setGithubAvailable(false)
+        }
       })
       .catch((err) => {
         setTxError(err.message)
@@ -156,31 +175,42 @@ export default function Contract() {
       })
   }, [data, accountId, rpcUrl, networkConfig])
 
+  // Check IPFS availability when data is loaded
   useEffect(() => {
-    if (!wasmError) return
+    if (!data || !data.cid || ipfsChecked) return
 
-    toast({
-      title: 'Wasm Match Error',
-      description: wasmError,
-      status: 'error',
-      duration: 5000,
-      isClosable: true,
-      position: 'bottom',
-    })
-  }, [wasmError, toast])
+    // Try to fetch something from IPFS to check if it's available
+    axios
+      .get(`/api/proxy-ipfs`, {
+        params: {
+          endpoint: 'structure',
+          cid: data.cid,
+          path: '/',
+        },
+        headers: {
+          'X-Network': networkConfig.name.toLowerCase(),
+        },
+      })
+      .then(() => {
+        setIpfsAvailable(true)
+      })
+      .catch(() => {
+        setIpfsAvailable(false)
+      })
+      .finally(() => {
+        setIpfsChecked(true)
+      })
+  }, [data, ipfsChecked, networkConfig])
 
+  // Update GitHub availability when GitHub data is loaded or fails
   useEffect(() => {
-    if (!txError) return
+    if (!loadingLinks) {
+      setGithubAvailable(!!github)
+    }
+  }, [github, loadingLinks])
 
-    toast({
-      title: 'Tx Match Error',
-      description: txError,
-      status: 'error',
-      duration: 5000,
-      isClosable: true,
-      position: 'bottom',
-    })
-  }, [txError, toast])
+  // No need for toast messages anymore,
+  // since we're displaying error information inline
 
   return (
     <>
@@ -221,14 +251,23 @@ export default function Contract() {
                   <Spinner size={'sm'} />
                 ) : wasmMatch ? (
                   <HStack>
-                    <CheckIcon />
+                    <CheckIcon color="green.500" />
                     <Text>Code Hash Matches</Text>
                   </HStack>
                 ) : (
-                  <HStack>
-                    <CloseIcon />
-                    <Text>Code Hash Mismatches</Text>
-                  </HStack>
+                  <Stack>
+                    <HStack>
+                      <CloseIcon color="red.500" />
+                      <Text color="red.500" fontWeight="medium">
+                        Code Hash Mismatches
+                      </Text>
+                    </HStack>
+                    {wasmError && (
+                      <Text fontSize="sm" color="gray.500" pl={6}>
+                        {wasmError}
+                      </Text>
+                    )}
+                  </Stack>
                 )}
               </Stack>
               <Stack spacing={'4'}>
@@ -270,74 +309,74 @@ export default function Contract() {
                 <DefaultHeading>Github</DefaultHeading>
                 {data?.github ? <GithubLink github={data.github} /> : null}
               </Stack>
-              {/* New Section for Links to Source Code */}
+              {/* Source Code Section with Availability Checks */}
               <Stack spacing={'4'}>
                 <DefaultHeading>Source Code</DefaultHeading>
                 <HStack>
                   <Text>Github</Text>
                   {loadingLinks ? (
                     <Skeleton height="20px" width="150px" />
-                  ) : (
-                    github && (
-                      <Link
-                        href={`https://github.com/${github.owner}/${
-                          github.repo
-                        }/blob/${github.sha}/${(() => {
-                          // Log paths for debugging
-                          console.log(
-                            'Contract path:',
-                            metadata.build_info.contract_path
-                          )
-
-                          // Get normalized path
-                          let normalizedPath = ''
-                          if (metadata.build_info.contract_path) {
-                            normalizedPath =
-                              metadata.build_info.contract_path.toString()
-                            if (normalizedPath.endsWith('/')) {
-                              normalizedPath = normalizedPath.slice(0, -1)
-                            }
+                  ) : githubAvailable && github ? (
+                    <Link
+                      href={`https://github.com/${github.owner}/${
+                        github.repo
+                      }/blob/${github.sha}/${(() => {
+                        // Get normalized path
+                        let normalizedPath = ''
+                        if (metadata.build_info.contract_path) {
+                          normalizedPath =
+                            metadata.build_info.contract_path.toString()
+                          if (normalizedPath.endsWith('/')) {
+                            normalizedPath = normalizedPath.slice(0, -1)
                           }
+                        }
 
-                          // For Rust contracts, ensure proper path structure
-                          if (data.lang === 'rust') {
-                            if (normalizedPath.endsWith('src')) {
-                              return `${normalizedPath}/lib.rs`
-                            } else if (normalizedPath.includes('/src/')) {
-                              const parts = normalizedPath.split('/src/')
-                              return `${parts[0]}/src/lib.rs`
-                            } else {
-                              return normalizedPath
-                                ? `${normalizedPath}/src/lib.rs`
-                                : 'src/lib.rs'
-                            }
+                        // For Rust contracts, ensure proper path structure
+                        if (data.lang === 'rust') {
+                          if (normalizedPath.endsWith('src')) {
+                            return `${normalizedPath}/lib.rs`
+                          } else if (normalizedPath.includes('/src/')) {
+                            const parts = normalizedPath.split('/src/')
+                            return `${parts[0]}/src/lib.rs`
                           } else {
-                            // For non-Rust contracts, just use the normalized path
                             return normalizedPath
+                              ? `${normalizedPath}/src/lib.rs`
+                              : 'src/lib.rs'
                           }
-                        })()}`}
-                        isExternal
-                      >
-                        <ExternalLinkIcon />
-                      </Link>
-                    )
+                        } else {
+                          // For non-Rust contracts, just use the normalized path
+                          return normalizedPath
+                        }
+                      })()}`}
+                      isExternal
+                    >
+                      <ExternalLinkIcon />
+                    </Link>
+                  ) : (
+                    <Text color="red.500" fontSize="sm">
+                      Unavailable
+                    </Text>
                   )}
                 </HStack>
                 <HStack>
                   <Text>Code Viewer (IPFS)</Text>
-                  {loadingLinks ? (
+                  {loadingLinks || !ipfsChecked ? (
                     <Skeleton height="20px" width="150px" />
-                  ) : (
+                  ) : ipfsAvailable ? (
                     <Link href={`/code/${accountId}`}>
                       <ExternalLinkIcon />
                     </Link>
+                  ) : (
+                    <Text color="red.500" fontSize="sm">
+                      Unavailable
+                    </Text>
                   )}
                 </HStack>
               </Stack>
 
+              <Heading fontSize={'lg'}>Contract Metadata</Heading>
               {metadata ? (
                 <>
-                  <Heading fontSize={'lg'}>Contract Metadata</Heading>
                   <Stack spacing={'4'}>
                     <DefaultHeading>Version</DefaultHeading>
                     <Text fontSize={{ base: 'md', md: 'lg' }}>
@@ -398,8 +437,16 @@ export default function Contract() {
                     )}
                   </Stack>
                 </>
+              ) : loadingLinks ? (
+                <HStack pt={4}>
+                  <Spinner size="sm" />
+                  <Text color="gray.500">Loading metadata...</Text>
+                </HStack>
               ) : (
-                <Spinner />
+                <Text color="red.500" pt={4}>
+                  No contract metadata found. The contract may not have
+                  published its metadata.
+                </Text>
               )}
             </Stack>
           ) : (
