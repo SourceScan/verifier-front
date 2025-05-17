@@ -135,10 +135,13 @@ export default function ContractsTable(props: {
                         onClick={() => navigateToCodeView(accountId)}
                         aria-label="View Code"
                         bg="transparent"
-                        color={networkConfig.accentColor}
-                        borderColor={networkConfig.accentColor}
+                        color={colorMode === 'dark' ? 'gray.100' : 'gray.700'}
+                        borderColor={
+                          colorMode === 'dark' ? 'gray.100' : 'gray.700'
+                        }
                         _hover={{
-                          bg: `${networkConfig.accentColor}20`,
+                          bg: colorMode === 'dark' ? 'gray.100' : 'gray.700',
+                          color: colorMode === 'dark' ? 'gray.900' : 'white',
                         }}
                         variant="outline"
                       >
@@ -153,10 +156,13 @@ export default function ContractsTable(props: {
                         onClick={() => props.handleShowMore(accountId)}
                         aria-label="Show More"
                         bg="transparent"
-                        color={networkConfig.accentColor}
-                        borderColor={networkConfig.accentColor}
+                        color={colorMode === 'dark' ? 'gray.100' : 'gray.700'}
+                        borderColor={
+                          colorMode === 'dark' ? 'gray.100' : 'gray.700'
+                        }
                         _hover={{
-                          bg: `${networkConfig.accentColor}20`,
+                          bg: colorMode === 'dark' ? 'gray.100' : 'gray.700',
+                          color: colorMode === 'dark' ? 'gray.900' : 'white',
                         }}
                         variant="outline"
                       >

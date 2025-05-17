@@ -1,6 +1,6 @@
 import NetworkBadge from '@/components/Common/NetworkBadge'
 import { NETWORKS, NetworkType, useNetwork } from '@/contexts/NetworkContext'
-import { bg } from '@/utils/theme'
+import { bg, color } from '@/utils/theme'
 import { ChevronDownIcon } from '@chakra-ui/icons'
 import {
   Box,
@@ -11,6 +11,7 @@ import {
   MenuItem,
   MenuList,
   Text,
+  useColorMode,
   useColorModeValue,
 } from '@chakra-ui/react'
 import { useRouter } from 'next/router'
@@ -18,7 +19,9 @@ import { useRouter } from 'next/router'
 export default function NetSelector() {
   const router = useRouter()
   const { network, setNetwork } = useNetwork()
+  const { colorMode } = useColorMode()
   const bgColor = useColorModeValue(bg.light, bg.dark)
+  const textColor = useColorModeValue(color.light, color.dark)
 
   const handleNetworkChange = (newNetwork: NetworkType) => {
     if (newNetwork !== network) {
@@ -46,7 +49,13 @@ export default function NetSelector() {
         px={{ base: 2, md: 4 }}
         py={{ base: 1, md: 2 }}
       >
-        <Box display="flex" alignItems="center" justifyContent="center">
+        <Box
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          bg={bg}
+          color={textColor}
+        >
           <Text display={{ base: 'none', md: 'flex' }} mr={1}>
             Network:
           </Text>
@@ -56,15 +65,21 @@ export default function NetSelector() {
           />
         </Box>
       </MenuButton>
-      <MenuList>
+      <MenuList bg={bg} color={textColor}>
         {Object.entries(NETWORKS).map(([key, value]) => (
           <MenuItem
+            bg={bg}
+            color={textColor}
             key={key}
             onClick={() => handleNetworkChange(key as NetworkType)}
             fontWeight={network === key ? 'bold' : 'normal'}
-            bg={network === key ? value.backgroundColor + '20' : undefined}
             _hover={{
-              bg: network === key ? value.backgroundColor + '20' : undefined,
+              bg:
+                key === 'mainnet'
+                  ? NETWORKS.mainnet.backgroundColor + '20'
+                  : network === key
+                  ? value.backgroundColor + '20'
+                  : undefined,
             }}
           >
             <HStack>

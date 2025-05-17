@@ -111,10 +111,11 @@ export default function ContractsCard(props: {
                   leftIcon={<VscCode />}
                   onClick={() => navigateToCodeView(contractId)}
                   bg="transparent"
-                  color={networkConfig.accentColor}
-                  borderColor={networkConfig.accentColor}
+                  color={colorMode === 'dark' ? 'gray.100' : 'gray.700'}
+                  borderColor={colorMode === 'dark' ? 'gray.100' : 'gray.700'}
                   _hover={{
-                    bg: `${networkConfig.accentColor}20`,
+                    bg: colorMode === 'dark' ? 'gray.100' : 'gray.700',
+                    color: colorMode === 'dark' ? 'gray.900' : 'white',
                   }}
                   variant="outline"
                 >
@@ -125,10 +126,11 @@ export default function ContractsCard(props: {
                   leftIcon={<InfoIcon />}
                   onClick={() => props.handleShowMore(contractId)}
                   bg="transparent"
-                  color={networkConfig.accentColor}
-                  borderColor={networkConfig.accentColor}
+                  color={colorMode === 'dark' ? 'gray.100' : 'gray.700'}
+                  borderColor={colorMode === 'dark' ? 'gray.100' : 'gray.700'}
                   _hover={{
-                    bg: `${networkConfig.accentColor}20`,
+                    bg: colorMode === 'dark' ? 'gray.100' : 'gray.700',
+                    color: colorMode === 'dark' ? 'gray.900' : 'white',
                   }}
                   variant="outline"
                 >
@@ -178,8 +180,8 @@ export default function ContractsCard(props: {
                   leftIcon={<VscCode />}
                   isDisabled={true}
                   bg="transparent"
-                  color={`${networkConfig.accentColor}50`}
-                  borderColor={`${networkConfig.accentColor}50`}
+                  color={colorMode === 'dark' ? 'gray.600' : 'gray.300'}
+                  borderColor={colorMode === 'dark' ? 'gray.600' : 'gray.300'}
                 >
                   Code
                 </Button>
@@ -189,8 +191,8 @@ export default function ContractsCard(props: {
                   leftIcon={<InfoIcon />}
                   isDisabled={true}
                   bg="transparent"
-                  color={`${networkConfig.accentColor}50`}
-                  borderColor={`${networkConfig.accentColor}50`}
+                  color={colorMode === 'dark' ? 'gray.600' : 'gray.300'}
+                  borderColor={colorMode === 'dark' ? 'gray.600' : 'gray.300'}
                 >
                   Info
                 </Button>

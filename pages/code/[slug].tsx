@@ -4,6 +4,7 @@ import { useNetwork } from '@/contexts/NetworkContext'
 import { formatSourceCodePath } from '@/utils/formatPath'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
 import { useRpcUrl } from '@/utils/near/rpc'
+import { bg, color } from '@/utils/theme'
 import {
   Box,
   Flex,
@@ -267,12 +268,12 @@ export default function Code() {
               size="xl"
               thickness="4px"
               speed="0.8s"
-              color={networkConfig.accentColor}
+              color={colorMode === 'dark' ? color.dark : color.light}
             />
             <Text
               fontSize="lg"
               fontWeight="medium"
-              color={colorMode === 'dark' ? 'gray.300' : 'gray.600'}
+              color={colorMode === 'dark' ? color.dark : color.light}
               textAlign="center"
             >
               Loading Contract Code...
@@ -300,17 +301,19 @@ export default function Code() {
                   px={{ base: 4, md: 6 }}
                   py={3}
                 >
-                  <HStack spacing={4}>
-                    <Text
-                      fontSize="lg"
-                      fontWeight="medium"
-                      color={colorMode === 'dark' ? 'gray.200' : 'gray.700'}
-                    >
+                  <HStack
+                    spacing={4}
+                    color={colorMode === 'dark' ? color.dark : color.light}
+                    bg={colorMode === 'dark' ? bg.dark : bg.light}
+                    p={2}
+                    borderRadius="md"
+                  >
+                    <Text fontSize="lg" fontWeight="medium">
                       Contract Code
                     </Text>
                     <Text
                       fontSize="md"
-                      color={colorMode === 'dark' ? 'gray.400' : 'gray.500'}
+                      opacity={0.8}
                       display={{ base: 'none', md: 'block' }}
                     >
                       {accountId}
