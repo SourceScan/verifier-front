@@ -228,7 +228,7 @@ export default function Contracts(props: { query: any }) {
             display={contracts ? 'flex' : 'none'}
             direction={{ base: 'column', md: 'row' }}
           >
-            {contracts && (
+            {contracts && search && (
               <Text
                 fontSize="sm"
                 color={colorMode === 'dark' ? 'gray.300' : 'gray.600'}
@@ -297,14 +297,6 @@ export default function Contracts(props: { query: any }) {
                 currentLimit={limit}
               />
             </>
-          )}
-          {contracts && contracts.length === 0 && (
-            <Text
-              fontSize="md"
-              color={colorMode === 'dark' ? 'gray.300' : 'gray.600'}
-            >
-              No contracts found
-            </Text>
           )}
           {pages && (
             <HStack display={pages ? 'flex' : 'none'}>
