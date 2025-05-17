@@ -157,11 +157,19 @@ export default function Code() {
           .then((response) => {
             console.log('IPFS structure response:', response.data)
             // Ensure we handle both array and object responses
-            const structure = Array.isArray(response.data.structure)
-              ? response.data.structure
-              : response.data.structure
-              ? [response.data.structure]
-              : []
+            // Handle different possible response structures from IPFS
+            let structure = []
+            if (response.data.structure) {
+              structure = Array.isArray(response.data.structure)
+                ? response.data.structure
+                : [response.data.structure]
+            } else if (Array.isArray(response.data)) {
+              structure = response.data
+            } else if (response.data && typeof response.data === 'object') {
+              structure = [response.data]
+            }
+
+            console.log('Processed IPFS structure:', structure)
 
             setFiles(structure.filter((file: any) => file.type === 'file'))
           })
@@ -214,7 +222,19 @@ export default function Code() {
       })
       .then((res) => {
         console.log('File content response:', res.data)
-        setCodeValue(res.data.content || res.data)
+        // Handle different response formats
+        if (res.data && typeof res.data === 'object') {
+          if (res.data.content) {
+            setCodeValue(res.data.content)
+          } else {
+            // If it's an object without content property, try to stringify it
+            setCodeValue(JSON.stringify(res.data, null, 2))
+          }
+        } else if (typeof res.data === 'string') {
+          setCodeValue(res.data)
+        } else {
+          setCodeValue('Unable to parse file content properly.')
+        }
       })
       .catch((err) => {
         console.error('Error fetching file content:', err)

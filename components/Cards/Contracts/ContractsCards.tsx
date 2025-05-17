@@ -45,10 +45,10 @@ export default function ContractsCard(props: {
       maxWidth="600px"
       spacing={'10'}
       display={{
-        base:
-          props.contracts && props.contracts?.length !== 0 ? 'flex' : 'none',
+        base: 'flex',
         md: 'none',
       }}
+      minHeight="500px"
     >
       {/* Render actual contract cards */}
       {props.contracts?.map((contract: any, i: number) => {

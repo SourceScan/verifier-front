@@ -30,6 +30,7 @@ export default function ContractsTableSkeleton({
       }}
       width="100%"
       maxWidth="1200px"
+      minHeight="400px"
     >
       <Table variant={'simple'} size={{ md: 'md' }}>
         <Thead>
@@ -56,7 +57,7 @@ export default function ContractsTableSkeleton({
         </Thead>
         <Tbody>
           {Array.from({ length: count }).map((_, i) => (
-            <Tr key={`skeleton-${i}`}>
+            <Tr key={`skeleton-${i}`} height="50px">
               <Td>
                 <Skeleton
                   height="20px"

@@ -267,12 +267,13 @@ export default function Contracts(props: { query: any }) {
               </Flex>
             </DefaultTooltip>
           </Stack>
-          {isLoading ? (
+          {/* Always render the containers to maintain consistent layout */}
+          {isLoading || !contracts ? (
             <>
               <ContractsTableSkeleton count={limit} />
               <ContractsCardsSkeleton count={limit} />
             </>
-          ) : contracts ? (
+          ) : (
             <>
               <ContractsTable
                 contracts={contracts}
@@ -285,8 +286,6 @@ export default function Contracts(props: { query: any }) {
                 currentLimit={limit}
               />
             </>
-          ) : (
-            <Text mt={8}>No contracts found</Text>
           )}
           <Text display={contracts?.length !== 0 ? 'none' : 'flex'}>
             Nothing here...

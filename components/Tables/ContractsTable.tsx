@@ -50,10 +50,11 @@ export default function ContractsTable(props: {
       rounded={'lg'}
       display={{
         base: 'none',
-        md: props.contracts && props.contracts?.length !== 0 ? 'flex' : 'none',
+        md: 'flex',
       }}
       width="100%"
       maxWidth="1200px"
+      minHeight="400px"
     >
       <Table variant={'simple'} size={{ md: 'md' }}>
         <Thead>
