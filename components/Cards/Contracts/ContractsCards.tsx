@@ -1,3 +1,4 @@
+import { useNetwork } from '@/contexts/NetworkContext'
 import { InfoIcon } from '@chakra-ui/icons'
 import {
   Box,
@@ -22,6 +23,7 @@ export default function ContractsCard(props: {
 }) {
   const router = useRouter()
   const { colorMode } = useColorMode()
+  const { networkConfig } = useNetwork()
 
   // Default to 5 items if not specified
   const limit = props.currentLimit || 5
@@ -108,11 +110,11 @@ export default function ContractsCard(props: {
                   size="sm"
                   leftIcon={<VscCode />}
                   onClick={() => navigateToCodeView(contractId)}
-                  bg={colorMode === 'dark' ? 'transparent' : 'transparent'}
-                  color={colorMode === 'dark' ? '#E8A317' : '#228B22'}
-                  borderColor={colorMode === 'dark' ? '#E8A317' : '#228B22'}
+                  bg="transparent"
+                  color={networkConfig.backgroundColor}
+                  borderColor={networkConfig.backgroundColor}
                   _hover={{
-                    bg: colorMode === 'dark' ? '#E8A31720' : '#228B2220',
+                    bg: `${networkConfig.backgroundColor}20`,
                   }}
                   variant="outline"
                 >
@@ -122,11 +124,11 @@ export default function ContractsCard(props: {
                   size="sm"
                   leftIcon={<InfoIcon />}
                   onClick={() => props.handleShowMore(contractId)}
-                  bg={colorMode === 'dark' ? 'transparent' : 'transparent'}
-                  color={colorMode === 'dark' ? '#E8A317' : '#228B22'}
-                  borderColor={colorMode === 'dark' ? '#E8A317' : '#228B22'}
+                  bg="transparent"
+                  color={networkConfig.backgroundColor}
+                  borderColor={networkConfig.backgroundColor}
                   _hover={{
-                    bg: colorMode === 'dark' ? '#E8A31720' : '#228B2220',
+                    bg: `${networkConfig.backgroundColor}20`,
                   }}
                   variant="outline"
                 >
@@ -175,9 +177,9 @@ export default function ContractsCard(props: {
                   variant="outline"
                   leftIcon={<VscCode />}
                   isDisabled={true}
-                  bg={colorMode === 'dark' ? 'transparent' : 'transparent'}
-                  color={colorMode === 'dark' ? '#E8A31750' : '#228B2250'}
-                  borderColor={colorMode === 'dark' ? '#E8A31750' : '#228B2250'}
+                  bg="transparent"
+                  color={`${networkConfig.backgroundColor}50`}
+                  borderColor={`${networkConfig.backgroundColor}50`}
                 >
                   Code
                 </Button>
@@ -186,9 +188,9 @@ export default function ContractsCard(props: {
                   variant="outline"
                   leftIcon={<InfoIcon />}
                   isDisabled={true}
-                  bg={colorMode === 'dark' ? 'transparent' : 'transparent'}
-                  color={colorMode === 'dark' ? '#E8A31750' : '#228B2250'}
-                  borderColor={colorMode === 'dark' ? '#E8A31750' : '#228B2250'}
+                  bg="transparent"
+                  color={`${networkConfig.backgroundColor}50`}
+                  borderColor={`${networkConfig.backgroundColor}50`}
                 >
                   Info
                 </Button>

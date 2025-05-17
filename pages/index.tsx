@@ -18,6 +18,7 @@ import {
   Spinner,
   Stack,
   Text,
+  useColorMode,
   useColorModeValue,
 } from '@chakra-ui/react'
 import axios from 'axios'
@@ -213,6 +214,7 @@ export default function Contracts(props: { query: any }) {
 
   // Get color values outside of the callback
   const bgColor = useColorModeValue(bg.light, bg.dark)
+  const { colorMode } = useColorMode()
 
   return (
     <>
@@ -325,10 +327,19 @@ export default function Contracts(props: { query: any }) {
                         setSelectedPage(pageIndex + 1)
                         setFromIndex(pageIndex * limit)
                       }}
-                      borderStyle={isSelected ? 'solid' : 'dashed'}
+                      borderStyle={'dashed'}
                       fontWeight={isSelected ? 'bold' : 'normal'}
-                      bg={isSelected ? 'gray.200' : bgColor}
-                      _hover={{ bg: isSelected ? 'gray.200' : bgColor }}
+                      bg={bgColor}
+                      color={
+                        isSelected ? networkConfig.backgroundColor : undefined
+                      }
+                      borderColor={
+                        isSelected ? networkConfig.backgroundColor : '#748094'
+                      }
+                      _hover={{
+                        bg: `${networkConfig.backgroundColor}10`,
+                        borderColor: networkConfig.backgroundColor,
+                      }}
                       minW="40px"
                       w="40px"
                       h="40px"

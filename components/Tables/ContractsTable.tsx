@@ -1,3 +1,4 @@
+import { useNetwork } from '@/contexts/NetworkContext'
 import { truncateStringInMiddle } from '@/utils/truncate'
 import { InfoIcon } from '@chakra-ui/icons'
 import {
@@ -26,6 +27,7 @@ export default function ContractsTable(props: {
 }) {
   const router = useRouter()
   const { colorMode } = useColorMode()
+  const { networkConfig } = useNetwork()
 
   // Use the limit provided by the parent component
   const limit = props.currentLimit
@@ -132,15 +134,11 @@ export default function ContractsTable(props: {
                         leftIcon={<VscCode />}
                         onClick={() => navigateToCodeView(accountId)}
                         aria-label="View Code"
-                        bg={
-                          colorMode === 'dark' ? 'transparent' : 'transparent'
-                        }
-                        color={colorMode === 'dark' ? '#E8A317' : '#228B22'}
-                        borderColor={
-                          colorMode === 'dark' ? '#E8A317' : '#228B22'
-                        }
+                        bg="transparent"
+                        color={networkConfig.backgroundColor}
+                        borderColor={networkConfig.backgroundColor}
                         _hover={{
-                          bg: colorMode === 'dark' ? '#E8A31720' : '#228B2220',
+                          bg: `${networkConfig.backgroundColor}20`,
                         }}
                         variant="outline"
                       >
@@ -154,15 +152,11 @@ export default function ContractsTable(props: {
                         leftIcon={<InfoIcon />}
                         onClick={() => props.handleShowMore(accountId)}
                         aria-label="Show More"
-                        bg={
-                          colorMode === 'dark' ? 'transparent' : 'transparent'
-                        }
-                        color={colorMode === 'dark' ? '#E8A317' : '#228B22'}
-                        borderColor={
-                          colorMode === 'dark' ? '#E8A317' : '#228B22'
-                        }
+                        bg="transparent"
+                        color={networkConfig.backgroundColor}
+                        borderColor={networkConfig.backgroundColor}
                         _hover={{
-                          bg: colorMode === 'dark' ? '#E8A31720' : '#228B2220',
+                          bg: `${networkConfig.backgroundColor}20`,
                         }}
                         variant="outline"
                       >

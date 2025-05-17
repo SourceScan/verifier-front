@@ -267,7 +267,7 @@ export default function Code() {
               size="xl"
               thickness="4px"
               speed="0.8s"
-              color={colorMode === 'dark' ? '#E8A317' : '#228B22'}
+              color={networkConfig.backgroundColor}
             />
             <Text
               fontSize="lg"
