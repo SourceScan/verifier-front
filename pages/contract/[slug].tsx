@@ -1,5 +1,6 @@
 import { GithubDto } from '@/Interfaces/github/github.dto'
 import { useNetwork } from '@/contexts/NetworkContext'
+import { detectNetworkFromAddress } from '@/utils/detectNetwork'
 import { extractGitHubDetails } from '@/utils/extractGithub'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
 import { useRpcUrl } from '@/utils/near/rpc'
@@ -31,7 +32,7 @@ export default function Contract() {
   const toast = useToast()
   const router = useRouter()
   const accountId = router.query.slug as string
-  const { networkConfig } = useNetwork()
+  const { networkConfig, network, setNetwork } = useNetwork()
   const rpcUrl = useRpcUrl()
 
   const [data, setData] = useState<any>(null)
@@ -45,15 +46,22 @@ export default function Contract() {
   const [ipfsAvailable, setIpfsAvailable] = useState(true)
   const [ipfsChecked, setIpfsChecked] = useState(false)
 
+  // Detect network from contract address and switch if necessary
+  useEffect(() => {
+    if (accountId) {
+      const detectedNetwork = detectNetworkFromAddress(accountId)
+      if (detectedNetwork && detectedNetwork !== network) {
+        console.log(`Detected ${detectedNetwork} contract, switching networks`)
+        setNetwork(detectedNetwork)
+      }
+    }
+  }, [accountId, network, setNetwork])
+
   useEffect(() => {
     if (!accountId || !networkConfig) return
 
-    // Determine which contract to use based on the network
-    const contractAddress =
-      typeof window !== 'undefined' &&
-      localStorage.getItem('network') === 'testnet'
-        ? process.env.NEXT_PUBLIC_CONTRACT_TESTNET
-        : process.env.NEXT_PUBLIC_CONTRACT_MAINNET
+    // Use the contract address based on the current network
+    const contractAddress = networkConfig.contract
 
     axios
       .post(

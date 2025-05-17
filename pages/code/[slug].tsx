@@ -1,6 +1,7 @@
 import FileSelectionDrawer from '@/components/Code/FileSelectionDrawer'
 import PageHead from '@/components/Common/PageHead'
 import { useNetwork } from '@/contexts/NetworkContext'
+import { detectNetworkFromAddress } from '@/utils/detectNetwork'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
 import { useRpcUrl } from '@/utils/near/rpc'
 import { bg, color } from '@/utils/theme'
@@ -23,7 +24,7 @@ export default function Code() {
   const { colorMode } = useColorMode()
   const router = useRouter()
   const accountId = router.query.slug as string
-  const { networkConfig } = useNetwork()
+  const { networkConfig, network, setNetwork } = useNetwork()
   const rpcUrl = useRpcUrl()
 
   const [loading, setLoading] = useState<boolean>(true)
@@ -35,6 +36,17 @@ export default function Code() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   // Add timeout to prevent infinite loading
+  // Detect network from contract address and switch if necessary
+  useEffect(() => {
+    if (accountId) {
+      const detectedNetwork = detectNetworkFromAddress(accountId)
+      if (detectedNetwork && detectedNetwork !== network) {
+        console.log(`Detected ${detectedNetwork} contract, switching networks`)
+        setNetwork(detectedNetwork)
+      }
+    }
+  }, [accountId, network, setNetwork])
+
   useEffect(() => {
     if (!accountId || !networkConfig) return
 
@@ -52,8 +64,7 @@ export default function Code() {
   useEffect(() => {
     if (!accountId || !networkConfig) return
 
-    // Ensure we're using the current network from the context
-    // which is properly initialized from localStorage
+    // Use the current network's contract address from the context
     const contractAddress = networkConfig.contract
 
     // Fetch the contract data
