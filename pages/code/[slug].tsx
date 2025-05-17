@@ -284,9 +284,11 @@ export default function Code() {
             {selectedFilePath && (
               <Box
                 width="100%"
-                borderBottomWidth="1px"
-                borderColor={colorMode === 'dark' ? 'gray.700' : 'gray.200'}
-                bg={colorMode === 'dark' ? 'gray.800' : 'gray.50'}
+                borderBottomWidth="2px"
+                borderTopWidth={'2px'}
+                borderColor={color}
+                color={color}
+                bg={bg}
                 position="sticky"
                 top="64px"
                 zIndex={10}
@@ -303,8 +305,8 @@ export default function Code() {
                 >
                   <HStack
                     spacing={4}
-                    color={colorMode === 'dark' ? color.dark : color.light}
-                    bg={colorMode === 'dark' ? bg.dark : bg.light}
+                    color={color}
+                    bg={bg}
                     p={2}
                     borderRadius="md"
                   >
@@ -336,11 +338,12 @@ export default function Code() {
             >
               <Box
                 borderWidth="1px"
-                borderColor={colorMode === 'dark' ? 'gray.700' : 'gray.200'}
+                borderColor={color}
+                color={color}
+                bg={bg}
                 borderRadius="md"
                 overflow="hidden"
                 boxShadow="sm"
-                bg={colorMode === 'dark' ? 'gray.900' : 'white'}
               >
                 <CodeMirror
                   editable={false}

@@ -55,23 +55,18 @@ const FileSelectionDrawer: React.FC<FileSelectionDrawerProps> = ({
         leftIcon={<VscFile />}
         variant="outline"
         size="md"
-        borderColor={colorMode === 'dark' ? 'gray.600' : 'gray.300'}
-        bg={colorMode === 'dark' ? 'gray.800' : 'white'}
-        _hover={{ bg: colorMode === 'dark' ? 'gray.700' : 'gray.100' }}
-        _active={{ bg: colorMode === 'dark' ? 'gray.700' : 'gray.100' }}
-        _expanded={{ bg: colorMode === 'dark' ? 'gray.700' : 'gray.100' }}
+        bg={colorMode === 'dark' ? '#28282B' : 'gray.100'}
         fontWeight="normal"
         width={{ base: 'full', md: 'auto' }}
       >
         {selectedFile ? selectedFile.name : 'Select File'}
       </MenuButton>
       <MenuList
-        bg={colorMode === 'dark' ? 'gray.800' : 'white'}
-        borderColor={colorMode === 'dark' ? 'gray.600' : 'gray.200'}
         boxShadow="lg"
         zIndex={20}
         maxH="400px"
         overflowY="auto"
+        bg={colorMode === 'dark' ? '#28282B' : 'gray.100'}
       >
         {Object.keys(groupedFiles).length > 1
           ? // If we have multiple directories, show them grouped
@@ -97,16 +92,7 @@ const FileSelectionDrawer: React.FC<FileSelectionDrawerProps> = ({
                   <MenuItem
                     key={file.path}
                     onClick={() => handleFileSelection(file.path)}
-                    bg={
-                      selectedFilePath === file.path
-                        ? colorMode === 'dark'
-                          ? 'gray.700'
-                          : 'gray.100'
-                        : 'transparent'
-                    }
-                    _hover={{
-                      bg: colorMode === 'dark' ? 'gray.700' : 'gray.100',
-                    }}
+                    bg={colorMode === 'dark' ? '#28282B' : 'gray.100'}
                     icon={<VscFile />}
                     pl={directory !== 'root' ? 6 : 3}
                   >
@@ -120,16 +106,7 @@ const FileSelectionDrawer: React.FC<FileSelectionDrawerProps> = ({
               <MenuItem
                 key={file.path}
                 onClick={() => handleFileSelection(file.path)}
-                bg={
-                  selectedFilePath === file.path
-                    ? colorMode === 'dark'
-                      ? 'gray.700'
-                      : 'gray.100'
-                    : 'transparent'
-                }
-                _hover={{
-                  bg: colorMode === 'dark' ? 'gray.700' : 'gray.100',
-                }}
+                bg={colorMode === 'dark' ? '#28282B' : 'gray.100'}
                 icon={<VscFile />}
               >
                 {file.name}

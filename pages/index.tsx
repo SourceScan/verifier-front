@@ -228,6 +228,15 @@ export default function Contracts(props: { query: any }) {
             display={contracts ? 'flex' : 'none'}
             direction={{ base: 'column', md: 'row' }}
           >
+            {contracts && (
+              <Text
+                fontSize="sm"
+                color={colorMode === 'dark' ? 'gray.300' : 'gray.600'}
+                mr={4}
+              >
+                {contracts.length}
+              </Text>
+            )}
             <HStack>
               <Input
                 w={'150px'}
@@ -289,9 +298,14 @@ export default function Contracts(props: { query: any }) {
               />
             </>
           )}
-          <Text display={contracts?.length !== 0 ? 'none' : 'flex'}>
-            Nothing here...
-          </Text>
+          {contracts && contracts.length === 0 && (
+            <Text
+              fontSize="md"
+              color={colorMode === 'dark' ? 'gray.300' : 'gray.600'}
+            >
+              No contracts found
+            </Text>
+          )}
           {pages && (
             <HStack display={pages ? 'flex' : 'none'}>
               {/* Always show 3 pagination buttons */}
