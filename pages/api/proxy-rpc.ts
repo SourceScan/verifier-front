@@ -47,10 +47,11 @@ export default async function handler(
     const body = req.body
 
     // Determine the RPC URL based on the network
+    // Use QuickNode RPC endpoints from environment variables
     const rpcUrl =
       network === 'testnet'
-        ? 'https://rpc.testnet.near.org'
-        : 'https://rpc.mainnet.near.org'
+        ? process.env.NEAR_RPC_TESTNET || 'https://rpc.testnet.near.org'
+        : process.env.NEAR_RPC_MAINNET || 'https://rpc.mainnet.near.org'
 
     // Forward the request to the appropriate RPC endpoint
     const response = await axios.post(rpcUrl, body)

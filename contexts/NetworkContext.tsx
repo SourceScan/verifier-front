@@ -46,40 +46,52 @@ const NetworkContext = createContext<NetworkContextType | undefined>(undefined)
 export const NetworkProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  // Always initialize with the default network from env for SSR compatibility
+  // Always initialize with the default for SSR compatibility
   const [network, setNetworkState] = useState<NetworkType>(DEFAULT_NETWORK)
 
-  // For client-side updates without hydration issues
+  // Client-side only: Update network from localStorage after mount
+  const [isClient, setIsClient] = useState(false)
+
+  // Set isClient to true on component mount to indicate we're in the browser
   useEffect(() => {
-    // Only run in browser
-    if (typeof window === 'undefined' || typeof localStorage === 'undefined')
-      return
+    setIsClient(true)
+  }, [])
+
+  // Only run this effect after the component has mounted on the client
+  useEffect(() => {
+    if (!isClient) return
 
     try {
       // Get saved network from localStorage
       const savedNetwork = localStorage.getItem('network') as NetworkType
 
       // Only update if valid network and different from current
-      if (
-        savedNetwork &&
-        Object.keys(NETWORKS).includes(savedNetwork) &&
-        savedNetwork !== network
-      ) {
+      if (savedNetwork && Object.keys(NETWORKS).includes(savedNetwork)) {
         setNetworkState(savedNetwork)
       } else if (!savedNetwork) {
-        // If no network is saved in localStorage, initialize it with the default
+        // If no network is saved in localStorage, initialize with default
         localStorage.setItem('network', DEFAULT_NETWORK)
       }
     } catch (error) {
       console.warn('Failed to access localStorage:', error)
-      // If there's an error, ensure we have a fallback
-      try {
-        localStorage.setItem('network', DEFAULT_NETWORK)
-      } catch (e) {
-        console.error('Failed to initialize localStorage:', e)
-      }
     }
-  }, []) // Remove network dependency to avoid circular updates
+  }, [isClient])
+
+  // Set default if not already set
+  useEffect(() => {
+    // Only run in browser
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined')
+      return
+
+    try {
+      // If no network is saved in localStorage, initialize it with the current state
+      if (!localStorage.getItem('network')) {
+        localStorage.setItem('network', network)
+      }
+    } catch (error) {
+      console.warn('Failed to access localStorage:', error)
+    }
+  }, [network])
 
   // Save network preference to localStorage when it changes
   const setNetwork = (newNetwork: NetworkType) => {

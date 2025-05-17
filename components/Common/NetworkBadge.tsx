@@ -16,6 +16,12 @@ const NetworkBadge: React.FC<NetworkBadgeProps> = ({
   showLabel = true,
 }) => {
   const { networkConfig } = useNetwork()
+  const [isClient, setIsClient] = React.useState(false)
+
+  // Only show actual network data after component is mounted on the client
+  React.useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   // Size configurations
   const sizeConfig = {
@@ -99,7 +105,7 @@ const NetworkBadge: React.FC<NetworkBadgeProps> = ({
         />
         {resolvedShowLabel && (
           <Text fontSize={fontSize} lineHeight="1.2" whiteSpace="nowrap">
-            {networkConfig.name}
+            {isClient ? networkConfig.name : 'Testnet'}
           </Text>
         )}
       </Box>

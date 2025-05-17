@@ -36,12 +36,11 @@ export default function Code() {
   useEffect(() => {
     if (!accountId || !networkConfig) return
 
-    // Determine which contract to use based on the network
-    const contractAddress =
-      typeof window !== 'undefined' &&
-      localStorage.getItem('network') === 'testnet'
-        ? process.env.NEXT_PUBLIC_CONTRACT_TESTNET
-        : process.env.NEXT_PUBLIC_CONTRACT_MAINNET
+    // Ensure we're using the current network from the context
+    // which is properly initialized from localStorage
+    const contractAddress = networkConfig.contract
+
+    console.log('Fetching contract data for network:', networkConfig.name)
 
     // Fetch the contract data
     axios
@@ -236,8 +235,28 @@ export default function Code() {
       <PageHead title={'SourceScan CodeView'} />
       <Stack position="relative" width="100%" minHeight="calc(100vh - 200px)">
         {loading ? (
-          <Flex justify="center" align="center" height="100%" width="100%">
-            <Spinner size={'xl'} />
+          <Flex
+            justify="center"
+            align="center"
+            height="calc(100vh - 200px)"
+            width="100%"
+            direction="column"
+            gap={4}
+          >
+            <Spinner
+              size="xl"
+              thickness="4px"
+              speed="0.8s"
+              color={colorMode === 'dark' ? 'blue.400' : 'teal.500'}
+            />
+            <Text
+              fontSize="lg"
+              fontWeight="medium"
+              color={colorMode === 'dark' ? 'gray.300' : 'gray.600'}
+              textAlign="center"
+            >
+              Loading Contract Code...
+            </Text>
           </Flex>
         ) : data && codeValue ? (
           <Stack width="100%" pt="70px" spacing={0}>

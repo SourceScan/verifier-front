@@ -1,10 +1,12 @@
 import ContractsCards from '@/components/Cards/Contracts/ContractsCards'
+import ContractsCardsSkeleton from '@/components/Cards/Contracts/ContractsCardsSkeleton'
 import DefaultTooltip from '@/components/Common/DefaultTooltip'
 import PageHead from '@/components/Common/PageHead'
 import PageRefresh from '@/components/Common/PageRefresh'
 import DefaultButton from '@/components/Inputs/DefaultButton'
 import DefaultSelect from '@/components/Inputs/DefaultSelect'
 import ContractsTable from '@/components/Tables/ContractsTable'
+import ContractsTableSkeleton from '@/components/Tables/ContractsTableSkeleton'
 import { useNetwork } from '@/contexts/NetworkContext'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
 import { useRpcUrl } from '@/utils/near/rpc'
@@ -62,6 +64,9 @@ export default function Contracts(props: { query: any }) {
       console.error('Network configuration or contract address is missing')
       return
     }
+
+    // Log the network being used for debugging
+    console.log('Loading contracts for network:', networkConfig.name)
 
     // Set loading state when starting a new request
     setIsLoading(true)
@@ -214,7 +219,7 @@ export default function Contracts(props: { query: any }) {
       <PageHead title={'SourceScan'} />
       <PageRefresh>
         <Stack align={'center'} justify={'center'} spacing={10} pb={100}>
-          <Spinner size={'xl'} display={contracts ? 'none' : 'flex'} />
+          {isLoading && !contracts && <Spinner size={'xl'} />}
           <Stack
             spacing={{ base: '10', md: '4' }}
             align={'center'}
@@ -262,16 +267,27 @@ export default function Contracts(props: { query: any }) {
               </Flex>
             </DefaultTooltip>
           </Stack>
-          <ContractsTable
-            contracts={contracts}
-            handleShowMore={handleShowMore}
-            currentLimit={limit}
-          />
-          <ContractsCards
-            contracts={contracts}
-            handleShowMore={handleShowMore}
-            currentLimit={limit}
-          />
+          {isLoading ? (
+            <>
+              <ContractsTableSkeleton count={limit} />
+              <ContractsCardsSkeleton count={limit} />
+            </>
+          ) : contracts ? (
+            <>
+              <ContractsTable
+                contracts={contracts}
+                handleShowMore={handleShowMore}
+                currentLimit={limit}
+              />
+              <ContractsCards
+                contracts={contracts}
+                handleShowMore={handleShowMore}
+                currentLimit={limit}
+              />
+            </>
+          ) : (
+            <Text mt={8}>No contracts found</Text>
+          )}
           <Text display={contracts?.length !== 0 ? 'none' : 'flex'}>
             Nothing here...
           </Text>
