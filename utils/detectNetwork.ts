@@ -20,3 +20,15 @@ export const detectNetworkFromAddress = (
   // If no specific TLD is found, return null
   return null
 }
+
+/**
+ * Checks if a contract address has a valid NEAR TLD (.near or .testnet)
+ * @param contractAddress The contract address to check
+ * @returns Boolean indicating if the address has a valid TLD
+ */
+export const hasValidTLD = (contractAddress: string): boolean => {
+  if (!contractAddress) return false
+  return (
+    contractAddress.endsWith('.near') || contractAddress.endsWith('.testnet')
+  )
+}

@@ -34,25 +34,51 @@ export default function Code() {
   const [selectedFilePath, setSelectedFilePath] = useState<any>(null)
   const [codeValue, setCodeValue] = useState<any>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [networkDetected, setNetworkDetected] = useState(false)
 
-  // Detect network from contract address and switch if necessary (only once when accountId is available)
+  // Step 1: Detect network from contract address and switch if necessary
   useEffect(() => {
     if (accountId) {
+      // Check if the TLD is valid (.near or .testnet)
+      const isValidTLD =
+        accountId.endsWith('.near') || accountId.endsWith('.testnet')
+      if (!isValidTLD) {
+        console.log(`Code page: Invalid TLD for contract: ${accountId}`)
+        setLoading(false)
+        setErrorMessage(
+          `Invalid contract address: ${accountId}. Contract addresses must end with .near or .testnet`
+        )
+        return
+      }
+
       const detectedNetwork = detectNetworkFromAddress(accountId)
       if (detectedNetwork && detectedNetwork !== network) {
         console.log(
           `Code page: Detected ${detectedNetwork} contract, switching networks from ${network}`
         )
         setNetwork(detectedNetwork)
-        // No need to add network-dependent data fetching here since it's covered by other useEffects
+      } else {
+        // If no network switch needed, mark detection as complete
+        setNetworkDetected(true)
       }
     }
-  }, [accountId]) // Only depend on accountId to avoid re-running when network changes
+  }, [accountId, network]) // Include network to detect when the switch completes
 
+  // Mark network detection as complete after a network change
   useEffect(() => {
-    if (!accountId || !networkConfig) return
+    if (accountId && !networkDetected) {
+      const detectedNetwork = detectNetworkFromAddress(accountId)
+      if (!detectedNetwork || detectedNetwork === network) {
+        setNetworkDetected(true)
+      }
+    }
+  }, [network, accountId, networkDetected])
 
-    // Create a timeout to ensure loading isn't stuck
+  // Step 2: Add timeout to prevent infinite loading and only fetch after network detection
+  useEffect(() => {
+    if (!accountId || !networkConfig || !networkDetected) return
+
+    // Create a timeout to ensure loading isn't stuck forever
     const timeoutId = setTimeout(() => {
       if (loading) {
         console.log('Loading timeout triggered after 15 seconds')
@@ -64,10 +90,23 @@ export default function Code() {
   }, [loading, accountId, networkConfig])
 
   useEffect(() => {
-    if (!accountId || !networkConfig) return
+    if (!accountId || !networkConfig || !networkDetected) return
+
+    console.log(
+      `Code page: Fetching contract data for ${accountId} on ${networkConfig.name}`
+    )
 
     // Use the current network's contract address from the context
     const contractAddress = networkConfig.contract
+    console.log(`Using contract address: ${contractAddress}`)
+
+    // Add a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      if (!data) {
+        console.log('Code page: Loading timeout triggered after 15 seconds')
+        setLoading(false)
+      }
+    }, 15000)
 
     // Fetch the contract data
     axios
@@ -94,17 +133,23 @@ export default function Code() {
         }
       )
       .then((res) => {
+        console.log('Code page: Contract data response received')
         const str_res = ascii_to_str(res.data.result.result)
         const json_res = JSON.parse(str_res)
+        console.log('Code page: Contract data parsed successfully')
         setData(json_res)
+        clearTimeout(timeoutId)
       })
       .catch((err) => {
         // Show error and stop loading
         console.error('Error fetching contract data:', err)
         setErrorMessage(`Failed to load contract data: ${err.message}`)
         setLoading(false)
+        clearTimeout(timeoutId)
       })
-  }, [accountId, rpcUrl, networkConfig])
+
+    return () => clearTimeout(timeoutId)
+  }, [accountId, rpcUrl, networkConfig, networkDetected])
 
   useEffect(() => {
     if (!data || !networkConfig) return
@@ -130,8 +175,20 @@ export default function Code() {
         }
       )
       .then((codeRes) => {
-        // Check if code hash matches (no need to log)
-        const codeHashMatches = codeRes.data.result.hash === data.code_hash
+        // Check if code hash matches (no need to log) with proper null checking
+        let codeHashMatches = false
+        try {
+          if (
+            codeRes &&
+            codeRes.data &&
+            codeRes.data.result &&
+            codeRes.data.result.hash
+          ) {
+            codeHashMatches = codeRes.data.result.hash === data.code_hash
+          }
+        } catch (error) {
+          console.error('Error comparing code hashes:', error)
+        }
 
         // Continue with metadata fetch
         return axios.post(
@@ -156,12 +213,29 @@ export default function Code() {
         )
       })
       .then((res) => {
-        const str_res = ascii_to_str(res.data.result.result)
-        const json_res = JSON.parse(str_res)
-        setMetadata(json_res)
+        let sourcePath = '/'
+        try {
+          // Add proper error handling for metadata parsing
+          if (
+            !res ||
+            !res.data ||
+            !res.data.result ||
+            !res.data.result.result
+          ) {
+            console.error('Invalid metadata response structure')
+            throw new Error('Invalid metadata response')
+          }
 
-        // Use the contract_path if available, otherwise use root path "/"
-        const sourcePath = json_res.build_info?.contract_path || '/'
+          const str_res = ascii_to_str(res.data.result.result)
+          const json_res = JSON.parse(str_res)
+          setMetadata(json_res)
+
+          // Use the contract_path if available, otherwise use root path "/"
+          sourcePath = json_res.build_info?.contract_path || '/'
+        } catch (error) {
+          console.error('Error parsing metadata:', error)
+          // Continue with default path
+        }
 
         // Add network information to headers
         const network = networkConfig.name.toLowerCase()
@@ -358,11 +432,69 @@ export default function Code() {
     setSelectedFilePath(path)
   }
 
+  // Add a state for invalid TLD error
+  const [invalidTLD, setInvalidTLD] = useState(false)
+
+  // Update the TLD validation to set the invalidTLD state
+  useEffect(() => {
+    if (accountId) {
+      // Check if the TLD is valid (.near or .testnet)
+      const isValidTLD =
+        accountId.endsWith('.near') || accountId.endsWith('.testnet')
+      if (!isValidTLD) {
+        console.log(`Code page: Invalid TLD for contract: ${accountId}`)
+        setLoading(false)
+        setErrorMessage(
+          `Invalid contract address: ${accountId}. Contract addresses must end with .near or .testnet`
+        )
+        setInvalidTLD(true)
+        return
+      }
+
+      const detectedNetwork = detectNetworkFromAddress(accountId)
+      if (detectedNetwork && detectedNetwork !== network) {
+        console.log(
+          `Code page: Detected ${detectedNetwork} contract, switching networks from ${network}`
+        )
+        setNetwork(detectedNetwork)
+      } else {
+        // If no network switch needed, mark detection as complete
+        setNetworkDetected(true)
+      }
+    }
+  }, [accountId]) // Only depend on accountId to avoid re-running when network changes
+
   return (
     <>
       <PageHead title={'SourceScan CodeView'} />
       <Stack position="relative" width="100%" minHeight="calc(100vh - 200px)">
-        {loading ? (
+        {invalidTLD ? (
+          <Flex
+            justify="center"
+            align="center"
+            height="calc(100vh - 200px)"
+            width="100%"
+            direction="column"
+            gap={4}
+          >
+            <Text
+              fontSize="lg"
+              fontWeight="medium"
+              textAlign="center"
+              color="red.500"
+            >
+              Invalid contract address: {accountId}
+            </Text>
+            <Text
+              fontSize="md"
+              color="gray.500"
+              textAlign="center"
+              maxW="600px"
+            >
+              Contract addresses must end with .near or .testnet
+            </Text>
+          </Flex>
+        ) : loading ? (
           <Flex
             justify="center"
             align="center"

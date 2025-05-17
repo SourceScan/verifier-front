@@ -45,26 +45,38 @@ export default function Contract() {
   const [githubAvailable, setGithubAvailable] = useState(true)
   const [ipfsAvailable, setIpfsAvailable] = useState(true)
   const [ipfsChecked, setIpfsChecked] = useState(false)
+  const [networkDetected, setNetworkDetected] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  // Detect network from contract address and switch if necessary (only once when accountId is available)
+  // Mark network detection as complete after a network change
   useEffect(() => {
-    if (accountId) {
+    if (accountId && !networkDetected) {
       const detectedNetwork = detectNetworkFromAddress(accountId)
-      if (detectedNetwork && detectedNetwork !== network) {
-        console.log(
-          `Contract page: Detected ${detectedNetwork} contract, switching networks from ${network}`
-        )
-        setNetwork(detectedNetwork)
-        // No need to add network-dependent data fetching here since it's covered by other useEffects
+      if (!detectedNetwork || detectedNetwork === network) {
+        setNetworkDetected(true)
       }
     }
-  }, [accountId]) // Only depend on accountId to avoid re-running when network changes
+  }, [network, accountId, networkDetected])
 
+  // Step 2: Only fetch data after network detection is complete
   useEffect(() => {
-    if (!accountId || !networkConfig) return
+    if (!accountId || !networkConfig || !networkDetected) return
+
+    console.log(
+      `Fetching contract data for ${accountId} on ${networkConfig.name}`
+    )
 
     // Use the contract address based on the current network
     const contractAddress = networkConfig.contract
+    console.log(`Using contract address: ${contractAddress}`)
+
+    // Add a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      if (!data) {
+        console.log('Loading timeout triggered after 15 seconds')
+        setLoading(false)
+      }
+    }, 15000)
 
     axios
       .post(
@@ -90,14 +102,21 @@ export default function Contract() {
         }
       )
       .then((res) => {
+        console.log('Contract data response received')
         const str_res = ascii_to_str(res.data.result.result)
         const json_res = JSON.parse(str_res)
+        console.log('Contract data parsed successfully')
         setData(json_res)
+        clearTimeout(timeoutId)
       })
       .catch((err) => {
-        console.log(err)
+        console.error('Error fetching contract data:', err)
+        setLoading(false)
+        clearTimeout(timeoutId)
       })
-  }, [accountId, rpcUrl, networkConfig])
+
+    return () => clearTimeout(timeoutId)
+  }, [accountId, rpcUrl, networkConfig, networkDetected])
 
   useEffect(() => {
     if (!data || !networkConfig) return
@@ -223,12 +242,50 @@ export default function Contract() {
   // No need for toast messages anymore,
   // since we're displaying error information inline
 
+  // Add a state for invalid TLD error
+  const [invalidTLD, setInvalidTLD] = useState(false)
+
+  // Step 1: Detect network from contract address and switch if necessary
+  useEffect(() => {
+    if (accountId) {
+      // Check if the TLD is valid (.near or .testnet)
+      const isValidTLD =
+        accountId.endsWith('.near') || accountId.endsWith('.testnet')
+      if (!isValidTLD) {
+        console.log(`Invalid TLD for contract: ${accountId}`)
+        setLoading(false)
+        setInvalidTLD(true)
+        return
+      }
+
+      const detectedNetwork = detectNetworkFromAddress(accountId)
+      if (detectedNetwork && detectedNetwork !== network) {
+        console.log(
+          `Contract page: Detected ${detectedNetwork} contract, switching networks from ${network}`
+        )
+        setNetwork(detectedNetwork)
+      } else {
+        // If no network switch needed, mark detection as complete
+        setNetworkDetected(true)
+      }
+    }
+  }, [accountId]) // Only depend on accountId to avoid re-running when network changes
+
   return (
     <>
       <PageHead title={'SourceScan'} />
       <PageRefresh>
         <Stack align={'center'} justify={'center'} spacing={10} pb={100}>
-          {data ? (
+          {invalidTLD ? (
+            <Stack spacing={4} align="center">
+              <Text color="red.500" fontSize="lg" fontWeight="medium">
+                Invalid contract address: {accountId}
+              </Text>
+              <Text color="gray.500">
+                Contract addresses must end with .near or .testnet
+              </Text>
+            </Stack>
+          ) : data ? (
             <Stack
               p={'4'}
               borderColor={'gray.500'}
