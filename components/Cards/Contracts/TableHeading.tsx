@@ -10,6 +10,7 @@ export default function TableHeading(props: {
         fontSize={'sm'}
         textTransform={'uppercase'}
         textColor={'gray.500'}
+        textAlign={'left'}
       >
         {props.label}
       </Heading>

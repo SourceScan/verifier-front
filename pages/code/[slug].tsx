@@ -1,8 +1,9 @@
 import FileSelectionDrawer from '@/components/Code/FileSelectionDrawer'
 import PageHead from '@/components/Common/PageHead'
+import { useNetwork } from '@/contexts/NetworkContext'
 import { formatSourceCodePath, lastSegment } from '@/utils/formatPath'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
-import { rpc } from '@/utils/near/rpc'
+import { useRpcUrl } from '@/utils/near/rpc'
 import {
   Flex,
   HStack,
@@ -21,6 +22,8 @@ export default function Code() {
   const { colorMode } = useColorMode()
   const router = useRouter()
   const accountId = router.query.slug as string
+  const { networkConfig } = useNetwork()
+  const rpcUrl = useRpcUrl()
 
   const [loading, setLoading] = useState<boolean>(true)
   const [data, setData] = useState<any>(null)
@@ -30,24 +33,39 @@ export default function Code() {
   const [codeValue, setCodeValue] = useState<any>(null)
 
   useEffect(() => {
-    if (!accountId) return
+    if (!accountId || !networkConfig) return
+
+    // Determine which contract to use based on the network
+    const contractAddress =
+      typeof window !== 'undefined' &&
+      localStorage.getItem('network') === 'testnet'
+        ? process.env.NEXT_PUBLIC_CONTRACT_TESTNET
+        : process.env.NEXT_PUBLIC_CONTRACT_MAINNET
 
     // Fetch the contract data
     axios
-      .post(rpc, {
-        jsonrpc: '2.0',
-        id: 'dontcare',
-        method: 'query',
-        params: {
-          request_type: 'call_function',
-          finality: 'final',
-          account_id: process.env.NEXT_PUBLIC_CONTRACT,
-          method_name: 'get_contract',
-          args_base64: Buffer.from(`{"account_id": "${accountId}"}`).toString(
-            'base64'
-          ),
+      .post(
+        rpcUrl,
+        {
+          jsonrpc: '2.0',
+          id: 'dontcare',
+          method: 'query',
+          params: {
+            request_type: 'call_function',
+            finality: 'final',
+            account_id: contractAddress,
+            method_name: 'get_contract',
+            args_base64: Buffer.from(`{"account_id": "${accountId}"}`).toString(
+              'base64'
+            ),
+          },
         },
-      })
+        {
+          headers: {
+            'X-Network': networkConfig.name.toLowerCase(),
+          },
+        }
+      )
       .then((res) => {
         const str_res = ascii_to_str(res.data.result.result)
         const json_res = JSON.parse(str_res)
@@ -56,24 +74,60 @@ export default function Code() {
       .catch((err) => {
         console.log(err)
       })
-  }, [accountId])
+  }, [accountId, rpcUrl, networkConfig])
 
   useEffect(() => {
-    if (!data) return
+    if (!data || !networkConfig) return
 
-    // Fetch the contract metadata
+    // Fetch the contract metadata and code hash
     axios
-      .post(rpc, {
-        jsonrpc: '2.0',
-        id: 'dontcare',
-        method: 'query',
-        params: {
-          request_type: 'call_function',
-          finality: 'final',
-          account_id: accountId,
-          method_name: 'contract_source_metadata',
-          args_base64: '',
+      .post(
+        rpcUrl,
+        {
+          jsonrpc: '2.0',
+          id: 'dontcare',
+          method: 'query',
+          params: {
+            request_type: 'view_code',
+            finality: 'final',
+            account_id: accountId,
+          },
         },
+        {
+          headers: {
+            'X-Network': networkConfig.name.toLowerCase(),
+          },
+        }
+      )
+      .then((codeRes) => {
+        // Check if code hash matches
+        if (codeRes.data.result.hash === data.code_hash) {
+          console.log('Code hash matches')
+        } else {
+          console.log('Code hash does not match')
+        }
+
+        // Continue with metadata fetch
+        return axios.post(
+          rpcUrl,
+          {
+            jsonrpc: '2.0',
+            id: 'dontcare',
+            method: 'query',
+            params: {
+              request_type: 'call_function',
+              finality: 'final',
+              account_id: accountId,
+              method_name: 'contract_source_metadata',
+              args_base64: '',
+            },
+          },
+          {
+            headers: {
+              'X-Network': networkConfig.name.toLowerCase(),
+            },
+          }
+        )
       })
       .then((res) => {
         const str_res = ascii_to_str(res.data.result.result)
@@ -87,12 +141,7 @@ export default function Code() {
         )
 
         // Add network information to headers
-        const network =
-          typeof window !== 'undefined'
-            ? localStorage.getItem('network') ||
-              process.env.NEXT_PUBLIC_NETWORK ||
-              'testnet'
-            : process.env.NEXT_PUBLIC_NETWORK || 'testnet'
+        const network = networkConfig.name.toLowerCase()
 
         axios
           .get(`${process.env.NEXT_PUBLIC_API_HOST}/api/ipfs/structure`, {
@@ -118,7 +167,7 @@ export default function Code() {
       .catch((err) => {
         console.log(err)
       })
-  }, [data, accountId])
+  }, [data, accountId, rpcUrl, networkConfig])
 
   useEffect(() => {
     if (!files || !data) return
@@ -156,9 +205,11 @@ export default function Code() {
   return (
     <>
       <PageHead title={'SourceScan CodeView'} />
-      <Stack alignItems={'center'} justifyContent={'center'} pt={'100px'}>
+      <Stack position="relative" width="100%" minHeight="calc(100vh - 200px)">
         {loading ? (
-          <Spinner size={'xl'} />
+          <Flex justify="center" align="center" height="100%" width="100%">
+            <Spinner size={'xl'} />
+          </Flex>
         ) : data && codeValue ? (
           <>
             {selectedFilePath ? (
@@ -174,6 +225,7 @@ export default function Code() {
                   rounded={'lg'}
                   borderColor={'gray.500'}
                   pr={'2'}
+                  bg="rgba(0,0,0,0.7)"
                 >
                   <FileSelectionDrawer
                     files={files}
@@ -184,19 +236,21 @@ export default function Code() {
                 </HStack>
               </Flex>
             ) : null}
-            <Flex zIndex={20}>
+            <Flex zIndex={20} width="100%" height="100%" direction="column">
               <CodeMirror
                 editable={false}
                 value={codeValue}
-                height={'100%'}
-                width={'95vw'}
+                height="calc(100vh - 200px)"
+                width="100%"
                 theme={colorMode}
                 extensions={[rust()]}
               />
             </Flex>
           </>
         ) : (
-          <Text>{accountId} not found</Text>
+          <Flex justify="center" align="center" height="100%" width="100%">
+            <Text>{accountId} not found</Text>
+          </Flex>
         )}
       </Stack>
     </>

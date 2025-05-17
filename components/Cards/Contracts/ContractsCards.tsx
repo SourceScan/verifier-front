@@ -12,7 +12,8 @@ export default function ContractsCard(props: {
 }) {
   return (
     <Stack
-      w={'80%'}
+      w={'100%'}
+      maxWidth="600px"
       spacing={'10'}
       display={{
         base:
@@ -38,10 +39,20 @@ export default function ContractsCard(props: {
           >
             <Stack spacing={'4'} width={'full'}>
               <TableHeading label={'Contract'}>
-                <Text textAlign={'end'}>{contractId}</Text>
-              </TableHeading>
-              <TableHeading label={'Lang'}>
-                <Text textAlign={'end'}>{lang}</Text>
+                <Text
+                  overflow="hidden"
+                  textOverflow="ellipsis"
+                  whiteSpace="nowrap"
+                  cursor="pointer"
+                  onClick={() => {
+                    const baseUrl = contractId.endsWith('.testnet')
+                      ? 'https://testnet.nearblocks.io/address/'
+                      : 'https://nearblocks.io/address/'
+                    window.open(`${baseUrl}${contractId}`, '_blank')
+                  }}
+                >
+                  {truncateStringInMiddle(contractId, 30)}
+                </Text>
               </TableHeading>
               <TableHeading label={'Block Height'}>
                 <Text textAlign={'end'}>{blockHeight}</Text>

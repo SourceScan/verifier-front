@@ -16,8 +16,8 @@ export const NETWORKS = {
     contract:
       process.env.NEXT_PUBLIC_CONTRACT_TESTNET ||
       'v2-verifier.sourcescan.testnet',
-    backgroundColor: '#FFC107',
-    textColor: '#000000',
+    backgroundColor: '#E8A317', // Darker amber that matches the theme
+    textColor: '#FFFFFF',
     rpcUrl: 'https://rpc.testnet.near.org',
     explorerUrl: 'https://explorer.testnet.near.org',
   },
@@ -25,16 +25,15 @@ export const NETWORKS = {
     name: 'Mainnet',
     contract:
       process.env.NEXT_PUBLIC_CONTRACT_MAINNET || 'v2-verifier.sourcescan.near',
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#228B22', // Forest green that matches the theme
     textColor: '#FFFFFF',
     rpcUrl: 'https://rpc.mainnet.near.org',
     explorerUrl: 'https://explorer.near.org',
   },
 }
 
-// Default network based on env var or fallback to testnet
-const DEFAULT_NETWORK: NetworkType =
-  (process.env.NEXT_PUBLIC_NETWORK as NetworkType) || 'testnet'
+// Default network
+const DEFAULT_NETWORK: NetworkType = 'testnet'
 
 interface NetworkContextType {
   network: NetworkType
@@ -53,7 +52,8 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({
   // For client-side updates without hydration issues
   useEffect(() => {
     // Only run in browser
-    if (typeof window === 'undefined') return
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined')
+      return
 
     try {
       // Get saved network from localStorage
@@ -66,9 +66,18 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({
         savedNetwork !== network
       ) {
         setNetworkState(savedNetwork)
+      } else if (!savedNetwork) {
+        // If no network is saved in localStorage, initialize it with the default
+        localStorage.setItem('network', DEFAULT_NETWORK)
       }
     } catch (error) {
       console.warn('Failed to access localStorage:', error)
+      // If there's an error, ensure we have a fallback
+      try {
+        localStorage.setItem('network', DEFAULT_NETWORK)
+      } catch (e) {
+        console.error('Failed to initialize localStorage:', e)
+      }
     }
   }, []) // Remove network dependency to avoid circular updates
 
@@ -78,7 +87,7 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({
     setNetworkState(newNetwork)
 
     // Save to localStorage if in browser
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
       try {
         localStorage.setItem('network', newNetwork)
       } catch (error) {

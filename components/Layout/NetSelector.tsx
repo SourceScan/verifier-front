@@ -32,20 +32,27 @@ export default function NetSelector() {
     <Menu>
       <MenuButton
         as={Button}
-        w={{ base: '50px', md: 'full' }}
+        w={{ base: 'auto', md: 'full' }}
+        minW={{ base: '40px', md: 'auto' }}
+        h={{ base: '36px', md: '40px' }}
         borderColor={'gray.500'}
         borderWidth={'1px'}
         rounded={'lg'}
         borderStyle={'dashed'}
         bg={bgColor}
         display={router.pathname.includes('code') ? 'none' : 'flex'}
-        rightIcon={<ChevronDownIcon />}
+        rightIcon={<ChevronDownIcon display={{ base: 'none', md: 'flex' }} />}
+        px={{ base: 2, md: 4 }}
+        py={{ base: 1, md: 2 }}
       >
-        <Box display="flex" alignItems="center">
+        <Box display="flex" alignItems="center" justifyContent="center">
           <Text display={{ base: 'none', md: 'flex' }} mr={1}>
             Network:
           </Text>
-          <NetworkBadge size="sm" showLabel={false} />
+          <NetworkBadge
+            size={{ base: 'md', md: 'sm' }}
+            showLabel={{ base: true, md: false }}
+          />
         </Box>
       </MenuButton>
       <MenuList>
@@ -54,6 +61,10 @@ export default function NetSelector() {
             key={key}
             onClick={() => handleNetworkChange(key as NetworkType)}
             fontWeight={network === key ? 'bold' : 'normal'}
+            bg={network === key ? value.backgroundColor + '20' : undefined}
+            _hover={{
+              bg: network === key ? value.backgroundColor + '20' : undefined,
+            }}
           >
             <HStack>
               <Box

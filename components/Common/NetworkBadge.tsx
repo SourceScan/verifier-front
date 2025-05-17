@@ -1,10 +1,14 @@
 import { useNetwork } from '@/contexts/NetworkContext'
-import { Box, Text, Tooltip } from '@chakra-ui/react'
+import { Box, Text, Tooltip, useBreakpointValue } from '@chakra-ui/react'
 import React from 'react'
 
 interface NetworkBadgeProps {
-  size?: 'sm' | 'md' | 'lg'
-  showLabel?: boolean
+  size?:
+    | 'sm'
+    | 'md'
+    | 'lg'
+    | { base?: 'sm' | 'md' | 'lg'; md?: 'sm' | 'md' | 'lg' }
+  showLabel?: boolean | { base?: boolean; md?: boolean }
 }
 
 const NetworkBadge: React.FC<NetworkBadgeProps> = ({
@@ -19,20 +23,32 @@ const NetworkBadge: React.FC<NetworkBadgeProps> = ({
       badgeSize: '8px',
       fontSize: '10px',
       padding: '2px 6px',
+      spacing: '1.5px',
     },
     md: {
       badgeSize: '10px',
       fontSize: '12px',
       padding: '3px 8px',
+      spacing: '2px',
     },
     lg: {
       badgeSize: '12px',
       fontSize: '14px',
       padding: '4px 10px',
+      spacing: '3px',
     },
   }
 
-  const { badgeSize, fontSize, padding } = sizeConfig[size]
+  // Handle responsive values
+  const resolvedSize =
+    useBreakpointValue(typeof size === 'object' ? size : { base: size }) || 'md'
+
+  const resolvedShowLabel =
+    useBreakpointValue(
+      typeof showLabel === 'object' ? showLabel : { base: showLabel }
+    ) ?? true
+
+  const { badgeSize, fontSize, padding, spacing } = sizeConfig[resolvedSize]
 
   return (
     <Tooltip label={`${networkConfig.name} Network`} hasArrow placement="top">
@@ -56,9 +72,9 @@ const NetworkBadge: React.FC<NetworkBadgeProps> = ({
           rounded="full"
           bg="currentColor"
           opacity={0.7}
-          mr={showLabel ? 1.5 : 0}
+          mr={resolvedShowLabel ? spacing : 0}
         />
-        {showLabel && (
+        {resolvedShowLabel && (
           <Text fontSize={fontSize} lineHeight="1.2">
             {networkConfig.name}
           </Text>

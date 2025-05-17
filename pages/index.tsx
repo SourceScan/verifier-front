@@ -7,9 +7,8 @@ import DefaultSelect from '@/components/Inputs/DefaultSelect'
 import ContractsTable from '@/components/Tables/ContractsTable'
 import { useNetwork } from '@/contexts/NetworkContext'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
-import { rpc } from '@/utils/near/rpc'
-import { range } from '@/utils/range'
-import { color } from '@/utils/theme'
+import { useRpcUrl } from '@/utils/near/rpc'
+import { bg, color } from '@/utils/theme'
 import {
   Flex,
   HStack,
@@ -25,6 +24,8 @@ import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 
 const limits = [5, 10, 50, 100]
+// Default limit is 5
+const DEFAULT_LIMIT = 5
 
 Contracts.getInitialProps = async (ctx: NextPageContext) => {
   return { query: ctx.query }
@@ -33,10 +34,11 @@ Contracts.getInitialProps = async (ctx: NextPageContext) => {
 export default function Contracts(props: { query: any }) {
   const router = useRouter()
   const { networkConfig } = useNetwork()
+  const rpcUrl = useRpcUrl()
 
   const [contracts, setContracts] = useState<any>(null)
   const [from_index, setFromIndex] = useState<number>(0)
-  const [limit, setLimit] = useState<number>(10)
+  const [limit, setLimit] = useState<number>(DEFAULT_LIMIT)
   const [pages, setPages] = useState<number | null>(null)
   const [selectedPage, setSelectedPage] = useState<number>(1)
   const [search, setSearch] = useState<string>('')
@@ -46,7 +48,7 @@ export default function Contracts(props: { query: any }) {
     setFromIndex(parseInt(props.query?.from_index) || 0)
 
     const limitToSet = parseInt(props.query?.limit)
-    setLimit(limits.includes(limitToSet) ? limitToSet : 10)
+    setLimit(limits.includes(limitToSet) ? limitToSet : DEFAULT_LIMIT)
   }, [props.query])
 
   useEffect(() => {
@@ -54,40 +56,69 @@ export default function Contracts(props: { query: any }) {
   }, [pages])
 
   useEffect(() => {
+    // Ensure we have a valid contract address before making the request
+    if (!networkConfig || !networkConfig.contract) {
+      console.error('Network configuration or contract address is missing')
+      return
+    }
+
     if (search === '')
       axios
-        .post(rpc, {
-          jsonrpc: '2.0',
-          id: 'dontcare',
-          method: 'query',
-          params: {
-            request_type: 'call_function',
-            finality: 'final',
-            account_id: networkConfig.contract,
-            method_name: 'get_contracts',
-            args_base64: Buffer.from(
-              `{"from_index": ${from_index}, "limit": ${limit}}`
-            ).toString('base64'),
+        .post(
+          rpcUrl,
+          {
+            jsonrpc: '2.0',
+            id: 'dontcare',
+            method: 'query',
+            params: {
+              request_type: 'call_function',
+              finality: 'final',
+              account_id: networkConfig.contract,
+              method_name: 'get_contracts',
+              args_base64: Buffer.from(
+                `{"from_index": ${from_index}, "limit": ${limit}}`
+              ).toString('base64'),
+            },
           },
-        })
+          {
+            headers: {
+              'X-Network': networkConfig.name.toLowerCase(),
+            },
+          }
+        )
         .then((res) => {
-          const str_res = ascii_to_str(res.data.result.result)
-          const json_res = JSON.parse(str_res)
-          setContracts(json_res[0])
-          setPages(json_res[1])
-          router.replace(
-            router.pathname,
-            `/?search=${search}&from_index=${from_index}&limit=${limit}`,
-            {
-              shallow: true,
+          if (!res.data || !res.data.result || !res.data.result.result) {
+            console.error('Invalid response format:', res.data)
+            return
+          }
+
+          try {
+            const str_res = ascii_to_str(res.data.result.result)
+            const json_res = JSON.parse(str_res)
+
+            if (Array.isArray(json_res) && json_res.length >= 2) {
+              setContracts(json_res[0])
+              setPages(json_res[1])
+
+              router.replace(
+                router.pathname,
+                `/?search=${search}&from_index=${from_index}&limit=${limit}`,
+                {
+                  shallow: true,
+                }
+              )
+            } else {
+              console.error('Invalid JSON response format:', json_res)
             }
-          )
+          } catch (parseError) {
+            console.error('Error parsing response:', parseError)
+          }
         })
         .catch((err) => {
-          console.log(err)
+          console.error('Error fetching contracts:', err)
         })
     else handleSearch()
-  }, [from_index, limit, search, networkConfig.contract, router.pathname])
+  }, [from_index, limit, search, networkConfig, router.pathname, rpcUrl])
 
   const handleSearchChange = (e: any) => {
     setSearch(e.target.value)
@@ -98,38 +129,70 @@ export default function Contracts(props: { query: any }) {
   }
 
   const handleSearch = () => {
+    // Ensure we have a valid contract address before making the request
+    if (!networkConfig || !networkConfig.contract) {
+      console.error('Network configuration or contract address is missing')
+      return
+    }
+
     axios
-      .post(rpc, {
-        jsonrpc: '2.0',
-        id: 'dontcare',
-        method: 'query',
-        params: {
-          request_type: 'call_function',
-          finality: 'final',
-          account_id: networkConfig.contract,
-          method_name: 'search',
-          args_base64: Buffer.from(
-            `{"key": "${search}", "from_index": ${from_index}, "limit": ${limit}}`
-          ).toString('base64'),
+      .post(
+        rpcUrl,
+        {
+          jsonrpc: '2.0',
+          id: 'dontcare',
+          method: 'query',
+          params: {
+            request_type: 'call_function',
+            finality: 'final',
+            account_id: networkConfig.contract,
+            method_name: 'search',
+            args_base64: Buffer.from(
+              `{"key": "${search}", "from_index": ${from_index}, "limit": ${limit}}`
+            ).toString('base64'),
+          },
         },
-      })
+        {
+          headers: {
+            'X-Network': networkConfig.name.toLowerCase(),
+          },
+        }
+      )
       .then((res) => {
-        const str_res = ascii_to_str(res.data.result.result)
-        const json_res = JSON.parse(str_res)
-        setContracts(json_res[0])
-        setPages(json_res[1])
-        router.replace(
-          router.pathname,
-          `/?search=${search}&from_index=${from_index}&limit=${limit}`,
-          {
-            shallow: true,
+        if (!res.data || !res.data.result || !res.data.result.result) {
+          console.error('Invalid response format:', res.data)
+          return
+        }
+
+        try {
+          const str_res = ascii_to_str(res.data.result.result)
+          const json_res = JSON.parse(str_res)
+
+          if (Array.isArray(json_res) && json_res.length >= 2) {
+            setContracts(json_res[0])
+            setPages(json_res[1])
+
+            router.replace(
+              router.pathname,
+              `/?search=${search}&from_index=${from_index}&limit=${limit}`,
+              {
+                shallow: true,
+              }
+            )
+          } else {
+            console.error('Invalid JSON response format:', json_res)
           }
-        )
+        } catch (parseError) {
+          console.error('Error parsing response:', parseError)
+        }
       })
       .catch((err) => {
-        console.log(err)
+        console.error('Error searching contracts:', err)
       })
   }
+
+  // Get color values outside of the callback
+  const bgColor = useColorModeValue(bg.light, bg.dark)
 
   return (
     <>
@@ -167,7 +230,10 @@ export default function Contracts(props: { query: any }) {
                   size={'md'}
                   w={'80px'}
                   onChange={(e: any) => {
-                    setLimit(e.target.value)
+                    const newLimit = parseInt(e.target.value)
+                    setLimit(newLimit)
+                    // Reset to first page when changing limit
+                    setSelectedPage(1)
                     setFromIndex(0)
                   }}
                   value={limit}
@@ -194,30 +260,49 @@ export default function Contracts(props: { query: any }) {
           </Text>
           {pages && (
             <HStack display={pages ? 'flex' : 'none'}>
-              <>
-                {range(
-                  pages > 1
-                    ? selectedPage > 2
-                      ? selectedPage - 2
-                      : 0
-                    : selectedPage - 1,
-                  pages > 1
-                    ? selectedPage + 1 < pages
-                      ? selectedPage
-                      : pages - 1
-                    : pages - 1
-                ).map((x, i: number) => (
-                  <DefaultButton
-                    key={`button_${i}`}
-                    onClick={() => {
-                      setSelectedPage(x + 1)
-                      setFromIndex(x * limit)
-                    }}
-                  >
-                    {x + 1}
-                  </DefaultButton>
-                ))}
-              </>
+              {/* Always show 3 pagination buttons */}
+              {(() => {
+                // Calculate which 3 buttons to show
+                let buttonsToShow = []
+
+                if (pages <= 3) {
+                  // If there are 3 or fewer pages, show all of them
+                  buttonsToShow = Array.from({ length: pages }, (_, i) => i)
+                } else if (selectedPage === 1) {
+                  // If on first page, show pages 1, 2, 3
+                  buttonsToShow = [0, 1, 2]
+                } else if (selectedPage === pages) {
+                  // If on last page, show last 3 pages
+                  buttonsToShow = [pages - 3, pages - 2, pages - 1]
+                } else {
+                  // Otherwise show previous, current, and next page
+                  buttonsToShow = [
+                    selectedPage - 2,
+                    selectedPage - 1,
+                    selectedPage,
+                  ]
+                }
+
+                return buttonsToShow.map((pageIndex) => {
+                  if (pageIndex < 0 || pageIndex >= pages) return null
+                  const isSelected = selectedPage === pageIndex + 1
+                  return (
+                    <DefaultButton
+                      key={`button_${pageIndex}`}
+                      onClick={() => {
+                        setSelectedPage(pageIndex + 1)
+                        setFromIndex(pageIndex * limit)
+                      }}
+                      borderStyle={isSelected ? 'solid' : 'dashed'}
+                      fontWeight={isSelected ? 'bold' : 'normal'}
+                      bg={isSelected ? 'gray.200' : bgColor}
+                      _hover={{ bg: isSelected ? 'gray.200' : bgColor }}
+                    >
+                      {pageIndex + 1}
+                    </DefaultButton>
+                  )
+                })
+              })()}
             </HStack>
           )}
         </Stack>
