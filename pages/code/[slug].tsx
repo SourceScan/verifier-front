@@ -1,7 +1,7 @@
 import FileSelectionDrawer from '@/components/Code/FileSelectionDrawer'
 import PageHead from '@/components/Common/PageHead'
 import { useNetwork } from '@/contexts/NetworkContext'
-import { formatSourceCodePath, lastSegment } from '@/utils/formatPath'
+import { formatSourceCodePath } from '@/utils/formatPath'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
 import { useRpcUrl } from '@/utils/near/rpc'
 import {
@@ -242,62 +242,78 @@ export default function Code() {
         ) : data && codeValue ? (
           <Stack width="100%" pt="70px" spacing={0}>
             {selectedFilePath && (
-              <Flex
+              <Box
                 width="100%"
-                justifyContent="center"
-                py={2}
                 borderBottomWidth="1px"
-                borderColor={colorMode === 'dark' ? 'gray.600' : 'gray.300'}
-                bg={colorMode === 'dark' ? 'gray.800' : 'gray.100'}
+                borderColor={colorMode === 'dark' ? 'gray.700' : 'gray.200'}
+                bg={colorMode === 'dark' ? 'gray.800' : 'gray.50'}
                 position="sticky"
                 top="64px"
                 zIndex={10}
                 boxShadow="sm"
               >
-                <HStack
-                  spacing={{ base: '2', lg: '3' }}
-                  rounded={'md'}
-                  px={{ base: 2, md: 4 }}
-                  py={2}
+                <Flex
+                  justify="space-between"
+                  align="center"
                   maxW="1200px"
                   width="100%"
-                  ml={{ base: 2, md: 0 }}
-                  mr={{ base: 2, md: 0 }}
+                  mx="auto"
+                  px={{ base: 4, md: 6 }}
+                  py={3}
                 >
+                  <HStack spacing={4}>
+                    <Text
+                      fontSize="lg"
+                      fontWeight="medium"
+                      color={colorMode === 'dark' ? 'gray.200' : 'gray.700'}
+                    >
+                      Contract Code
+                    </Text>
+                    <Text
+                      fontSize="md"
+                      color={colorMode === 'dark' ? 'gray.400' : 'gray.500'}
+                      display={{ base: 'none', md: 'block' }}
+                    >
+                      {accountId}
+                    </Text>
+                  </HStack>
                   <FileSelectionDrawer
                     files={files}
                     handleFileSelection={handleFileSelection}
                     selectedFilePath={selectedFilePath}
                   />
-                  <Text fontSize={'md'} fontWeight="medium" isTruncated>
-                    {lastSegment(selectedFilePath)}
-                  </Text>
-                </HStack>
-              </Flex>
+                </Flex>
+              </Box>
             )}
-            <Flex
+            <Box
               width="100%"
-              direction="column"
-              flex={1}
-              px={{ base: 0, md: 4 }}
-              py={2}
+              maxW="1200px"
+              mx="auto"
+              px={{ base: 4, md: 6 }}
+              py={4}
             >
               <Box
                 borderWidth="1px"
                 borderColor={colorMode === 'dark' ? 'gray.700' : 'gray.200'}
                 borderRadius="md"
                 overflow="hidden"
+                boxShadow="sm"
+                bg={colorMode === 'dark' ? 'gray.900' : 'white'}
               >
                 <CodeMirror
                   editable={false}
                   value={codeValue}
-                  height="calc(100vh - 150px)"
+                  height="calc(100vh - 180px)"
                   width="100%"
                   theme={colorMode}
                   extensions={[rust()]}
+                  style={{
+                    fontSize: '14px',
+                    fontFamily: 'monospace',
+                  }}
                 />
               </Box>
-            </Flex>
+            </Box>
           </Stack>
         ) : (
           <Flex justify="center" align="center" height="100%" width="100%">
