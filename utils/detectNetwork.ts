@@ -1,34 +1,48 @@
 import { NetworkType } from '@/contexts/NetworkContext'
 
 /**
- * Detects the network type from a contract address based on its TLD
- * @param contractAddress The contract address to analyze
- * @returns The detected network type or null if can't be determined
+ * Checks whether an address is a valid NEAR implicit-style account:
+ * - NEAR implicit account: 64 lowercase hex characters
+ * - ETH implicit account: 0x + 40 lowercase hex characters
+ * - NEAR deterministic account: 0s + 40 lowercase hex characters
+ */
+export const isImplicitAccount = (address: string): boolean => {
+  if (!address) return false
+  return (
+    /^[0-9a-f]{64}$/.test(address) ||
+    /^0x[0-9a-f]{40}$/.test(address) ||
+    /^0s[0-9a-f]{40}$/.test(address)
+  )
+}
+
+/**
+ * Detects the network type from a contract address based on its TLD.
+ * Returns null for implicit/deterministic accounts since they can exist on either network.
  */
 export const detectNetworkFromAddress = (
   contractAddress: string
 ): NetworkType | null => {
   if (!contractAddress) return null
 
-  // Check if the address ends with .near (mainnet) or .testnet (testnet)
   if (contractAddress.endsWith('.near')) {
     return 'mainnet'
   } else if (contractAddress.endsWith('.testnet')) {
     return 'testnet'
   }
 
-  // If no specific TLD is found, return null
+  // Implicit and deterministic accounts can exist on either network
   return null
 }
 
 /**
- * Checks if a contract address has a valid NEAR TLD (.near or .testnet)
- * @param contractAddress The contract address to check
- * @returns Boolean indicating if the address has a valid TLD
+ * Checks if a contract address is a valid NEAR account identifier.
+ * Accepts named accounts (.near/.testnet) and implicit/deterministic accounts.
  */
-export const hasValidTLD = (contractAddress: string): boolean => {
+export const isValidNearAccount = (contractAddress: string): boolean => {
   if (!contractAddress) return false
   return (
-    contractAddress.endsWith('.near') || contractAddress.endsWith('.testnet')
+    contractAddress.endsWith('.near') ||
+    contractAddress.endsWith('.testnet') ||
+    isImplicitAccount(contractAddress)
   )
 }

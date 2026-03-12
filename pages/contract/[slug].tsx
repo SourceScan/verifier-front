@@ -1,6 +1,6 @@
 import { GithubDto } from '@/Interfaces/github/github.dto'
 import { useNetwork } from '@/contexts/NetworkContext'
-import { detectNetworkFromAddress } from '@/utils/detectNetwork'
+import { detectNetworkFromAddress, isValidNearAccount } from '@/utils/detectNetwork'
 import { extractGitHubDetails } from '@/utils/extractGithub'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
 import { useRpcUrl } from '@/utils/near/rpc'
@@ -248,11 +248,8 @@ export default function Contract() {
   // Step 1: Detect network from contract address and switch if necessary
   useEffect(() => {
     if (accountId) {
-      // Check if the TLD is valid (.near or .testnet)
-      const isValidTLD =
-        accountId.endsWith('.near') || accountId.endsWith('.testnet')
-      if (!isValidTLD) {
-        console.log(`Invalid TLD for contract: ${accountId}`)
+      if (!isValidNearAccount(accountId)) {
+        console.log(`Invalid account ID: ${accountId}`)
         setLoading(false)
         setInvalidTLD(true)
         return
@@ -282,7 +279,8 @@ export default function Contract() {
                 Invalid contract address: {accountId}
               </Text>
               <Text color="gray.500">
-                Contract addresses must end with .near or .testnet
+                Must be a named account (.near/.testnet) or an
+                implicit/deterministic account.
               </Text>
             </Stack>
           ) : data ? (
