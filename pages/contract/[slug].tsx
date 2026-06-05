@@ -51,6 +51,8 @@ export default function Contract() {
   // Mark network detection as complete after a network change
   useEffect(() => {
     if (accountId && !networkDetected) {
+      if (!isValidNearAccount(accountId)) return
+
       const detectedNetwork = detectNetworkFromAddress(accountId)
       if (!detectedNetwork || detectedNetwork === network) {
         setNetworkDetected(true)
@@ -60,7 +62,14 @@ export default function Contract() {
 
   // Step 2: Only fetch data after network detection is complete
   useEffect(() => {
-    if (!accountId || !networkConfig || !networkDetected) return
+    if (
+      !accountId ||
+      !networkConfig ||
+      !networkDetected ||
+      !isValidNearAccount(accountId)
+    ) {
+      return
+    }
 
     console.log(
       `Fetching contract data for ${accountId} on ${networkConfig.name}`
@@ -119,7 +128,9 @@ export default function Contract() {
   }, [accountId, rpcUrl, networkConfig, networkDetected])
 
   useEffect(() => {
-    if (!data || !networkConfig) return
+    if (!data || !networkConfig || !accountId || !isValidNearAccount(accountId)) {
+      return
+    }
 
     axios
       .post(
@@ -242,8 +253,7 @@ export default function Contract() {
   // No need for toast messages anymore,
   // since we're displaying error information inline
 
-  // Add a state for invalid TLD error
-  const [invalidTLD, setInvalidTLD] = useState(false)
+  const [invalidAccountId, setInvalidAccountId] = useState(false)
 
   // Step 1: Detect network from contract address and switch if necessary
   useEffect(() => {
@@ -251,9 +261,11 @@ export default function Contract() {
       if (!isValidNearAccount(accountId)) {
         console.log(`Invalid account ID: ${accountId}`)
         setLoading(false)
-        setInvalidTLD(true)
+        setInvalidAccountId(true)
         return
       }
+
+      setInvalidAccountId(false)
 
       const detectedNetwork = detectNetworkFromAddress(accountId)
       if (detectedNetwork && detectedNetwork !== network) {
@@ -273,14 +285,13 @@ export default function Contract() {
       <PageHead title={'SourceScan'} />
       <PageRefresh>
         <Stack align={'center'} justify={'center'} spacing={10} pb={100}>
-          {invalidTLD ? (
+          {invalidAccountId ? (
             <Stack spacing={4} align="center">
               <Text color="red.500" fontSize="lg" fontWeight="medium">
                 Invalid contract address: {accountId}
               </Text>
               <Text color="gray.500">
-                Must be a named account (.near/.testnet) or an
-                implicit/deterministic account.
+                Must be a valid NEAR account ID.
               </Text>
             </Stack>
           ) : data ? (
