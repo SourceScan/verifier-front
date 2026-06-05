@@ -43,7 +43,7 @@ export default function Code() {
         console.log(`Code page: Invalid account ID: ${accountId}`)
         setLoading(false)
         setErrorMessage(
-          `Invalid contract address: ${accountId}. Must be a named account (.near/.testnet) or an implicit/deterministic account.`
+          `Invalid contract address: ${accountId}. Must be a valid NEAR account ID.`
         )
         return
       }
@@ -64,6 +64,8 @@ export default function Code() {
   // Mark network detection as complete after a network change
   useEffect(() => {
     if (accountId && !networkDetected) {
+      if (!isValidNearAccount(accountId)) return
+
       const detectedNetwork = detectNetworkFromAddress(accountId)
       if (!detectedNetwork || detectedNetwork === network) {
         setNetworkDetected(true)
@@ -73,7 +75,14 @@ export default function Code() {
 
   // Step 2: Add timeout to prevent infinite loading and only fetch after network detection
   useEffect(() => {
-    if (!accountId || !networkConfig || !networkDetected) return
+    if (
+      !accountId ||
+      !networkConfig ||
+      !networkDetected ||
+      !isValidNearAccount(accountId)
+    ) {
+      return
+    }
 
     // Create a timeout to ensure loading isn't stuck forever
     const timeoutId = setTimeout(() => {
@@ -87,7 +96,14 @@ export default function Code() {
   }, [loading, accountId, networkConfig])
 
   useEffect(() => {
-    if (!accountId || !networkConfig || !networkDetected) return
+    if (
+      !accountId ||
+      !networkConfig ||
+      !networkDetected ||
+      !isValidNearAccount(accountId)
+    ) {
+      return
+    }
 
     console.log(
       `Code page: Fetching contract data for ${accountId} on ${networkConfig.name}`
@@ -149,7 +165,9 @@ export default function Code() {
   }, [accountId, rpcUrl, networkConfig, networkDetected])
 
   useEffect(() => {
-    if (!data || !networkConfig) return
+    if (!data || !networkConfig || !accountId || !isValidNearAccount(accountId)) {
+      return
+    }
 
     // Fetch the contract metadata and code hash
     axios
@@ -429,21 +447,22 @@ export default function Code() {
     setSelectedFilePath(path)
   }
 
-  // Add a state for invalid TLD error
-  const [invalidTLD, setInvalidTLD] = useState(false)
+  const [invalidAccountId, setInvalidAccountId] = useState(false)
 
-  // Update the TLD validation to set the invalidTLD state
   useEffect(() => {
     if (accountId) {
       if (!isValidNearAccount(accountId)) {
         console.log(`Code page: Invalid account ID: ${accountId}`)
         setLoading(false)
         setErrorMessage(
-          `Invalid contract address: ${accountId}. Must be a named account (.near/.testnet) or an implicit/deterministic account.`
+          `Invalid contract address: ${accountId}. Must be a valid NEAR account ID.`
         )
-        setInvalidTLD(true)
+        setInvalidAccountId(true)
         return
       }
+
+      setInvalidAccountId(false)
+      setErrorMessage(null)
 
       const detectedNetwork = detectNetworkFromAddress(accountId)
       if (detectedNetwork && detectedNetwork !== network) {
@@ -462,7 +481,7 @@ export default function Code() {
     <>
       <PageHead title={'SourceScan CodeView'} />
       <Stack position="relative" width="100%" minHeight="calc(100vh - 200px)">
-        {invalidTLD ? (
+        {invalidAccountId ? (
           <Flex
             justify="center"
             align="center"
@@ -485,8 +504,7 @@ export default function Code() {
               textAlign="center"
               maxW="600px"
             >
-              Must be a named account (.near/.testnet) or an
-              implicit/deterministic account.
+              Must be a valid NEAR account ID.
             </Text>
           </Flex>
         ) : loading ? (
