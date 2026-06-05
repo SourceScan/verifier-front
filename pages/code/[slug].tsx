@@ -1,7 +1,7 @@
 import FileSelectionDrawer from '@/components/Code/FileSelectionDrawer'
 import PageHead from '@/components/Common/PageHead'
 import { useNetwork } from '@/contexts/NetworkContext'
-import { detectNetworkFromAddress } from '@/utils/detectNetwork'
+import { detectNetworkFromAddress, isValidNearAccount } from '@/utils/detectNetwork'
 import { ascii_to_str } from '@/utils/near/ascii_converter'
 import { useRpcUrl } from '@/utils/near/rpc'
 import { bg, color } from '@/utils/theme'
@@ -39,14 +39,11 @@ export default function Code() {
   // Step 1: Detect network from contract address and switch if necessary
   useEffect(() => {
     if (accountId) {
-      // Check if the TLD is valid (.near or .testnet)
-      const isValidTLD =
-        accountId.endsWith('.near') || accountId.endsWith('.testnet')
-      if (!isValidTLD) {
-        console.log(`Code page: Invalid TLD for contract: ${accountId}`)
+      if (!isValidNearAccount(accountId)) {
+        console.log(`Code page: Invalid account ID: ${accountId}`)
         setLoading(false)
         setErrorMessage(
-          `Invalid contract address: ${accountId}. Contract addresses must end with .near or .testnet`
+          `Invalid contract address: ${accountId}. Must be a named account (.near/.testnet) or an implicit/deterministic account.`
         )
         return
       }
@@ -438,14 +435,11 @@ export default function Code() {
   // Update the TLD validation to set the invalidTLD state
   useEffect(() => {
     if (accountId) {
-      // Check if the TLD is valid (.near or .testnet)
-      const isValidTLD =
-        accountId.endsWith('.near') || accountId.endsWith('.testnet')
-      if (!isValidTLD) {
-        console.log(`Code page: Invalid TLD for contract: ${accountId}`)
+      if (!isValidNearAccount(accountId)) {
+        console.log(`Code page: Invalid account ID: ${accountId}`)
         setLoading(false)
         setErrorMessage(
-          `Invalid contract address: ${accountId}. Contract addresses must end with .near or .testnet`
+          `Invalid contract address: ${accountId}. Must be a named account (.near/.testnet) or an implicit/deterministic account.`
         )
         setInvalidTLD(true)
         return
@@ -491,7 +485,8 @@ export default function Code() {
               textAlign="center"
               maxW="600px"
             >
-              Contract addresses must end with .near or .testnet
+              Must be a named account (.near/.testnet) or an
+              implicit/deterministic account.
             </Text>
           </Flex>
         ) : loading ? (
