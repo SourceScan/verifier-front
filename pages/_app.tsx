@@ -6,6 +6,7 @@ import { useRouter } from 'next/router'
 import { useEffect } from 'react'
 import { markClientNavigation } from '@/utils/navigation'
 
+import WebAnalytics from '@/components/Common/WebAnalytics'
 import Layout from '@/components/Layout/Layout'
 import NextNProgress from 'nextjs-progressbar'
 
@@ -30,6 +31,8 @@ export default function App({ Component, pageProps }: AppProps) {
           </Layout>
         </NetworkProvider>
       </ChakraProvider>
+      {process.env.NODE_ENV === 'production' &&
+        process.env.NEXT_PUBLIC_VERCEL_ENV === 'production' && <WebAnalytics />}
     </>
   )
 }

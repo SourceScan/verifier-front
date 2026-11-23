@@ -6,6 +6,7 @@ export default function Document() {
   return (
     <Html lang="en">
       <Head>
+        <meta name="referrer" content="strict-origin" />
         <link rel="icon" href="/sourcescan.png" type="image/png" />
       </Head>
       <body>
