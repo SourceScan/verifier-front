@@ -83,7 +83,6 @@ export default function PageRefresh(props: { children: React.ReactNode }) {
     >
       {loaded ? (
         <>
-          <Center pt={20} pb={10} mb={18} />
           {props.children}
         </>
       ) : (

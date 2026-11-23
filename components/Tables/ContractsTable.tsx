@@ -1,196 +1,80 @@
-import { useNetwork } from '@/contexts/NetworkContext'
+import ExternalTextLink from '@/components/Common/ExternalTextLink'
+import { RowHashStatus } from '@/components/Contracts/HashStatus'
+import type { NetworkType } from '@/contexts/NetworkContext'
+import type { ContractEntry } from '@/utils/contracts'
 import { truncateStringInMiddle } from '@/utils/truncate'
-import { InfoIcon } from '@chakra-ui/icons'
-import {
-  Button,
-  HStack,
-  Table,
-  TableContainer,
-  Tbody,
-  Td,
-  Text,
-  Th,
-  Thead,
-  Tr,
-  useColorMode,
-} from '@chakra-ui/react'
-import { useRouter } from 'next/router'
-import { VscCode } from 'react-icons/vsc'
-import CidLink from '../Common/CidLink'
-import DefaultTooltip from '../Common/DefaultTooltip'
-import Approved from '../Contracts/Approved'
+import { codePath, contractPath, explorerContractUrl, ipfsUrl } from '@/utils/urls'
+import { Box, Button, HStack, Link, Table, Tbody, Td, Text, Th, Thead, Tr, VisuallyHidden } from '@chakra-ui/react'
+import NextLink from 'next/link'
 
-export default function ContractsTable(props: {
-  contracts: any
-  handleShowMore: (_accountId: string) => void
-  currentLimit: number
-}) {
-  const router = useRouter()
-  const { colorMode } = useColorMode()
-  const { networkConfig } = useNetwork()
+const LG = { base: 'none', lg: 'table-cell' }
+const XL = { base: 'none', xl: 'table-cell' }
 
-  // Use the limit provided by the parent component
-  const limit = props.currentLimit
-
-  // Generate a unique key for the current set of contracts
-  // This ensures Approved components remount when contracts change
-  const contractsKey = props.contracts
-    ? props.contracts
-        .map((c: any) => c[0])
-        .join('-')
-        .substring(0, 20)
-    : 'no-contracts'
-
-  const navigateToCodeView = (accountId: string) => {
-    router.push(`/code/${accountId}`)
-  }
-
+/**
+ * Registry table (md+). Columns are added as width allows, so it never
+ * scrolls sideways; each status cell checks the chain only while visible.
+ */
+export default function ContractsTable(props: { contracts: ContractEntry[]; network: NetworkType; caption: string }) {
   return (
-    <TableContainer
-      borderColor={'gray.500'}
-      borderWidth={'1px'}
-      rounded={'lg'}
-      display={{
-        base: 'none',
-        md: 'flex',
-      }}
-      width="100%"
-      maxWidth="1200px"
-      minHeight="400px"
-    >
-      <Table variant={'simple'} size={{ md: 'md' }}>
+    <Box display={{ base: 'none', md: 'block' }} border="1px solid" borderColor="rule" rounded="lg" bg="surface" overflow="hidden">
+      <Table
+        size="sm"
+        sx={{
+          tableLayout: 'fixed',
+          th: { fontFamily: 'body', textTransform: 'none', letterSpacing: 0, fontSize: 'xs', fontWeight: 600, color: 'muted', bg: 'subtle', borderColor: 'rule', py: 2.5, px: 4 },
+          td: { borderColor: 'rule', py: 2.5, px: 4, fontSize: 'sm' },
+          'tbody tr:last-of-type td': { borderBottom: 'none' },
+        }}
+      >
+        <VisuallyHidden as="caption">{props.caption}</VisuallyHidden>
         <Thead>
           <Tr>
-            <Th width="30%" textAlign="left">
-              Contract
-            </Th>
-            <Th width="15%" textAlign="left">
-              Block Height
-            </Th>
-            <Th width="15%" textAlign="left">
-              Code Hash
-            </Th>
-            <Th width="15%" textAlign="left">
-              IPFS
-            </Th>
-            <Th width="10%" textAlign="left">
-              Approved
-            </Th>
-            <Th width="15%" textAlign="left">
-              Actions
-            </Th>
+            <Th scope="col">Contract</Th>
+            <Th scope="col" w="170px">On-chain status</Th>
+            <Th scope="col" w="130px" isNumeric display={LG}>Block height</Th>
+            <Th scope="col" w="160px" display={XL}>Code hash</Th>
+            <Th scope="col" w="170px" display={XL}>IPFS snapshot</Th>
+            <Th scope="col" w="210px"><VisuallyHidden>Links</VisuallyHidden></Th>
           </Tr>
         </Thead>
         <Tbody>
-          {/* Render actual contract rows */}
-          {props.contracts?.map((contract: any, i: number) => {
-            const accountId = contract[0]
-            const lang = contract[1].lang
-            const blockHeight = contract[1].block_height
-            const codeHash = contract[1].code_hash
-            const cid = contract[1].cid
-            return (
-              <Tr key={i}>
-                <Td
-                  maxW="400px"
-                  overflow="hidden"
-                  textOverflow="ellipsis"
-                  whiteSpace="nowrap"
-                  width="30%"
-                >
-                  <Text
-                    overflow="hidden"
-                    textOverflow="ellipsis"
-                    whiteSpace="nowrap"
-                    cursor="pointer"
-                    onClick={() => {
-                      const baseUrl = accountId.endsWith('.testnet')
-                        ? 'https://testnet.nearblocks.io/address/'
-                        : 'https://nearblocks.io/address/'
-                      window.open(`${baseUrl}${accountId}`, '_blank')
-                    }}
-                  >
-                    {truncateStringInMiddle(accountId, 30)}
-                  </Text>
-                </Td>
-                <Td>{blockHeight}</Td>
-                <Td>{truncateStringInMiddle(codeHash, 8)}</Td>
-                <Td>
-                  <CidLink cid={cid} isTruncated />
-                </Td>
-                <Td>
-                  <Approved
-                    accountId={accountId}
-                    cid={cid}
-                    codeHash={codeHash}
-                    key={`${contractsKey}-${accountId}`}
-                  />
-                </Td>
-                <Td>
-                  <HStack spacing={2}>
-                    <DefaultTooltip label={'View Code'} placement={'top'}>
-                      <Button
-                        size="xs"
-                        leftIcon={<VscCode />}
-                        onClick={() => navigateToCodeView(accountId)}
-                        aria-label="View Code"
-                        bg="transparent"
-                        color={colorMode === 'dark' ? 'gray.100' : 'gray.700'}
-                        borderColor={
-                          colorMode === 'dark' ? 'gray.100' : 'gray.700'
-                        }
-                        _hover={{
-                          bg: colorMode === 'dark' ? 'gray.100' : 'gray.700',
-                          color: colorMode === 'dark' ? 'gray.900' : 'white',
-                        }}
-                        variant="outline"
-                      >
-                        Code
-                      </Button>
-                    </DefaultTooltip>
-
-                    <DefaultTooltip label={'Show More'} placement={'top'}>
-                      <Button
-                        size="xs"
-                        leftIcon={<InfoIcon />}
-                        onClick={() => props.handleShowMore(accountId)}
-                        aria-label="Show More"
-                        bg="transparent"
-                        color={colorMode === 'dark' ? 'gray.100' : 'gray.700'}
-                        borderColor={
-                          colorMode === 'dark' ? 'gray.100' : 'gray.700'
-                        }
-                        _hover={{
-                          bg: colorMode === 'dark' ? 'gray.100' : 'gray.700',
-                          color: colorMode === 'dark' ? 'gray.900' : 'white',
-                        }}
-                        variant="outline"
-                      >
-                        Info
-                      </Button>
-                    </DefaultTooltip>
-                  </HStack>
-                </Td>
-              </Tr>
-            )
-          })}
-
-          {/* Add placeholder rows to maintain consistent table height based on the selected limit */}
-          {props.contracts &&
-            Array.from({
-              length: limit - Math.min(props.contracts.length, limit),
-            }).map((_, i) => (
-              <Tr key={`placeholder-${i}`} height="57px">
-                <Td width="30%"></Td>
-                <Td width="15%"></Td>
-                <Td width="15%"></Td>
-                <Td width="15%"></Td>
-                <Td width="10%"></Td>
-                <Td width="15%"></Td>
-              </Tr>
-            ))}
+          {props.contracts.map(([accountId, data]) => (
+            <Tr key={accountId} _hover={{ bg: 'subtle' }}>
+              <Td>
+                <Link as={NextLink} href={contractPath(accountId)} title={accountId} display="block" fontFamily="mono" fontSize="13px" fontWeight="500" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">
+                  {accountId}
+                </Link>
+              </Td>
+              <Td>
+                <RowHashStatus network={props.network} accountId={accountId} codeHash={data.code_hash} />
+              </Td>
+              <Td isNumeric display={LG} fontFamily="mono" fontSize="13px" color="muted">
+                {data.block_height}
+              </Td>
+              <Td display={XL}>
+                <Text fontFamily="mono" fontSize="13px" color="muted" title={data.code_hash} whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis">
+                  {truncateStringInMiddle(data.code_hash, 12)}
+                </Text>
+              </Td>
+              <Td display={XL}>
+                <ExternalTextLink href={ipfsUrl(data.cid)} srSuffix={`IPFS snapshot ${data.cid}`} title={data.cid} fontFamily="mono" fontSize="13px" whiteSpace="nowrap">
+                  {truncateStringInMiddle(data.cid, 12)}
+                </ExternalTextLink>
+              </Td>
+              <Td>
+                <HStack spacing={3} justify="flex-end">
+                  <Button as={NextLink} href={codePath(accountId)} size="xs" variant="quiet">
+                    Source<VisuallyHidden> code of {accountId}</VisuallyHidden>
+                  </Button>
+                  <ExternalTextLink href={explorerContractUrl(props.network, accountId)} srSuffix={`: view contract ${accountId}`} fontSize="sm" fontWeight="500" title={`View contract on NearBlocks`}>
+                    NearBlocks
+                  </ExternalTextLink>
+                </HStack>
+              </Td>
+            </Tr>
+          ))}
         </Tbody>
       </Table>
-    </TableContainer>
+    </Box>
   )
 }

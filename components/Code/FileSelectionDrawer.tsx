@@ -2,9 +2,9 @@ import {
   Button,
   Menu,
   MenuButton,
-  MenuItem,
+  MenuItemOption,
   MenuList,
-  useColorMode,
+  MenuOptionGroup,
 } from '@chakra-ui/react'
 import React from 'react'
 import { VscChevronDown, VscFile } from 'react-icons/vsc'
@@ -28,51 +28,47 @@ const FileSelectionDrawer: React.FC<FileSelectionDrawerProps> = ({
   handleFileSelection,
   selectedFilePath,
 }) => {
-  const { colorMode } = useColorMode()
   const selectedFile = files.find((file) => file.path === selectedFilePath)
+  const selectedName = selectedFile
+    ? selectedFile.displayName || selectedFile.name
+    : 'Select file'
 
   // Sort files by display name (which includes folder path) for better organization
-  const sortedFiles = [...files].sort((a, b) => {
-    // Use displayName if available, otherwise fall back to name
-    const aName = a.displayName || a.name
-    const bName = b.displayName || b.name
-    return aName.localeCompare(bName)
-  })
+  const sortedFiles = [...files].sort((a, b) =>
+    (a.displayName || a.name).localeCompare(b.displayName || b.name)
+  )
 
   return (
     <Menu>
       <MenuButton
         as={Button}
-        rightIcon={<VscChevronDown />}
-        leftIcon={<VscFile />}
+        rightIcon={<VscChevronDown aria-hidden />}
+        leftIcon={<VscFile aria-hidden />}
         variant="outline"
-        size="md"
-        bg={colorMode === 'dark' ? '#28282B' : 'gray.100'}
+        size="sm"
+        bg="surface"
+        borderColor="rule"
         fontWeight="normal"
-        width={{ base: 'full', md: 'auto' }}
+        fontFamily="mono"
+        width={{ base: 'full', sm: 'auto' }}
+        maxW={{ sm: '320px' }}
+        aria-label={`Source file: ${selectedName}. ${files.length} files`}
       >
-        {selectedFile
-          ? selectedFile.displayName || selectedFile.name
-          : 'Select File'}
+        {selectedName}
       </MenuButton>
-      <MenuList
-        boxShadow="lg"
-        zIndex={20}
-        maxH="400px"
-        overflowY="auto"
-        bg={colorMode === 'dark' ? '#28282B' : 'gray.100'}
-      >
-        {/* Always show as a flat list, sorted alphabetically */}
-        {sortedFiles.map((file) => (
-          <MenuItem
-            key={file.path}
-            onClick={() => handleFileSelection(file.path)}
-            bg={colorMode === 'dark' ? '#28282B' : 'gray.100'}
-            icon={<VscFile />}
-          >
-            {file.displayName || file.name}
-          </MenuItem>
-        ))}
+      <MenuList bg="surface" zIndex={20} maxH="60vh" overflowY="auto">
+        <MenuOptionGroup
+          title={`${files.length} files`}
+          type="radio"
+          value={selectedFilePath}
+          onChange={(value) => typeof value === 'string' && handleFileSelection(value)}
+        >
+          {sortedFiles.map((file) => (
+            <MenuItemOption key={file.path} value={file.path} bg="surface" fontFamily="mono" fontSize="sm">
+              {file.displayName || file.name}
+            </MenuItemOption>
+          ))}
+        </MenuOptionGroup>
       </MenuList>
     </Menu>
   )

@@ -16,7 +16,7 @@ export const getRpcUrl = (network: 'testnet' | 'mainnet'): string => {
   return RPC_URLS[network]
 }
 
-// Get network from localStorage with fallback to testnet
+// Get network from localStorage with fallback to mainnet (the default network)
 const getNetworkFromStorage = (): 'testnet' | 'mainnet' => {
   if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
     try {
@@ -28,7 +28,7 @@ const getNetworkFromStorage = (): 'testnet' | 'mainnet' => {
       console.warn('Failed to access localStorage:', e)
     }
   }
-  return 'testnet'
+  return 'mainnet'
 }
 
 // Use a function to get the latest network value

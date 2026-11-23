@@ -1,11 +1,24 @@
-import { ExternalLinkIcon } from '@chakra-ui/icons'
+import { Icon, Link } from '@chakra-ui/react'
+import { FiExternalLink } from 'react-icons/fi'
 
-export default function IconLink(props: { onClick: () => void }) {
+/** Keyboard-reachable external icon link with an accessible name. */
+export default function IconLink(props: { href: string; label: string }) {
   return (
-    <ExternalLinkIcon
-      cursor={'pointer'}
-      zIndex={'20'}
-      onClick={props.onClick}
-    />
+    <Link
+      href={props.href}
+      isExternal
+      aria-label={`${props.label} (opens in new tab)`}
+      title={props.label}
+      display="inline-flex"
+      alignItems="center"
+      justifyContent="center"
+      minW="28px"
+      minH="28px"
+      rounded="md"
+      color="muted"
+      _hover={{ color: 'accent', bg: 'subtle' }}
+    >
+      <Icon as={FiExternalLink} aria-hidden />
+    </Link>
   )
 }

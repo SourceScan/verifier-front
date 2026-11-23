@@ -34,13 +34,16 @@ export const NETWORKS = {
   },
 }
 
-// Default network
-const DEFAULT_NETWORK: NetworkType = 'testnet'
+// Default for visitors who have not chosen a network. A saved choice
+// (including a previously saved Testnet) always wins.
+const DEFAULT_NETWORK: NetworkType = 'mainnet'
 
 interface NetworkContextType {
   network: NetworkType
   networkConfig: typeof NETWORKS.testnet
   setNetwork: (_network: NetworkType) => void
+  /** False until the saved network preference has been read on the client. */
+  isReady: boolean
 }
 
 const NetworkContext = createContext<NetworkContextType | undefined>(undefined)
@@ -50,6 +53,7 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({
 }) => {
   // Always initialize with the default for SSR compatibility
   const [network, setNetworkState] = useState<NetworkType>(DEFAULT_NETWORK)
+  const [isReady, setIsReady] = useState(false)
 
   // Client-side only: Update network from localStorage after mount
   useEffect(() => {
@@ -60,16 +64,15 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({
       // Get saved network from localStorage
       const savedNetwork = localStorage.getItem('network') as NetworkType
 
-      // Only update if valid network and different from current
+      // Only an explicit choice is persisted; the default is not written,
+      // so fresh visitors keep following DEFAULT_NETWORK.
       if (savedNetwork && Object.keys(NETWORKS).includes(savedNetwork)) {
         setNetworkState(savedNetwork)
-      } else if (!savedNetwork) {
-        // If no network is saved in localStorage, initialize with default
-        localStorage.setItem('network', DEFAULT_NETWORK)
       }
     } catch (error) {
       console.warn('Failed to access localStorage:', error)
     }
+    setIsReady(true)
   }, [])
 
   // Save network preference to localStorage when it changes
@@ -94,7 +97,9 @@ export const NetworkProvider: React.FC<{ children: ReactNode }> = ({
   const networkConfig = NETWORKS[network]
 
   return (
-    <NetworkContext.Provider value={{ network, networkConfig, setNetwork }}>
+    <NetworkContext.Provider
+      value={{ network, networkConfig, setNetwork, isReady }}
+    >
       {children}
     </NetworkContext.Provider>
   )
