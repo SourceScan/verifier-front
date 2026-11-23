@@ -3,11 +3,11 @@ import CopyButton from '@/components/Common/CopyButton'
 import ExternalTextLink from '@/components/Common/ExternalTextLink'
 import GithubLink from '@/components/Common/GithubLink'
 import { Field, Fields, Panel } from '@/components/Common/Panel'
-import { hashStatusText } from '@/components/Contracts/HashStatus'
+import { verdictSummary } from '@/components/Contracts/Verdict'
 import { NETWORKS, NetworkType } from '@/contexts/NetworkContext'
 import type { HashCheck } from '@/hooks/useCodeHashCheck'
 import type { GithubDto } from '@/Interfaces/github/github.dto'
-import type { ContractData } from '@/utils/contracts'
+import { ContractData, recordedBlock } from '@/utils/contracts'
 import { explorerContractUrl } from '@/utils/urls'
 import { HStack, Text } from '@chakra-ui/react'
 import { ReactNode } from 'react'
@@ -31,9 +31,9 @@ export default function EvidencePane(props: {
   return (
     <Panel title="How this verdict was reached">
       <Fields>
-        <Field label="Verdict">{hashStatusText(check.status).detail}</Field>
+        <Field label="Verdict">{verdictSummary(check.status, NETWORKS[network].name)}</Field>
         <Field label="Method">
-          The deployed code hash comes from a <Mono>view_code</Mono> query at the latest final block on {NETWORKS[network].name}; it is compared with the code hash recorded in the SourceScan registry.
+          SourceScan queries <Mono>view_code</Mono> at the latest final block on {NETWORKS[network].name} and compares the returned hash with the code hash recorded in the registry.
         </Field>
         <Field label="Verified code hash">
           <HStack spacing={1} align="flex-start">
@@ -53,9 +53,14 @@ export default function EvidencePane(props: {
             </Text>
           )}
         </Field>
-        <Field label="Recorded at block">
-          <Mono>{data.block_height}</Mono>
+        <Field label="Verification recorded at block">
+          <Mono>{recordedBlock(data.block_height) ?? 'Unavailable'}</Mono>
         </Field>
+        {check.blockHeight !== undefined && (
+          <Field label="Deployed code checked at final block">
+            <Mono>#{check.blockHeight}</Mono>
+          </Field>
+        )}
         <Field label="Source snapshot">
           <HStack spacing={1} align="flex-start">
             <CidLink cid={data.cid} />

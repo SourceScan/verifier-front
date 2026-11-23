@@ -1,11 +1,11 @@
 import Pagination from '@/components/Common/Pagination'
 import PageHead from '@/components/Common/PageHead'
 import StatePanel from '@/components/Common/StatePanel'
-import { RowHashStatus } from '@/components/Contracts/HashStatus'
 import RegistryList, { RegistryListSkeleton } from '@/components/Registry/RegistryList'
 import RegistryTotal from '@/components/Registry/RegistryTotal'
 import { useNetwork } from '@/contexts/NetworkContext'
 import { RegistryParams, lookupExact, useExactLookup, useRegistryCount, useRegistryPage } from '@/hooks/useRegistry'
+import { verificationLabel } from '@/utils/contracts'
 import { historyEntry, readScroll, rememberRegistryUrl, saveScroll } from '@/utils/navigation'
 import { contractSearchKey, queryKind } from '@/utils/registrySearch'
 import { explorerContractUrl, workspaceHref } from '@/utils/urls'
@@ -31,7 +31,7 @@ import NextLink from 'next/link'
 import { useRouter } from 'next/router'
 import type { ParsedUrlQuery } from 'querystring'
 import { FormEvent, useEffect, useRef, useState } from 'react'
-import { FiArrowRight, FiArrowUpRight, FiSearch } from 'react-icons/fi'
+import { FiArrowUpRight, FiSearch } from 'react-icons/fi'
 
 /** All previously shared page sizes stay valid (old links used 5 by default). */
 const LIMITS = [5, 10, 20, 50, 100]
@@ -243,13 +243,12 @@ export default function Home(props: { query: ParsedUrlQuery }) {
             <Text fontSize="sm" color="muted" w={{ base: 'full', sm: 'auto' }}>
               Exact account on {exact.network === 'mainnet' ? 'Mainnet' : 'Testnet'}
             </Text>
-            <Link as={NextLink} href={workspaceHref(exact.accountId, { network: exact.network })} fontFamily="mono" fontWeight="600" wordBreak="break-all">
+            <Link as={NextLink} href={workspaceHref(exact.accountId, { network: exact.network })} fontFamily="mono" fontWeight="600" wordBreak="break-all" minW={0}>
               {exact.accountId}
             </Link>
-            <RowHashStatus network={exact.network} accountId={exact.accountId} codeHash={exact.data.code_hash} />
-            <Button as={NextLink} href={workspaceHref(exact.accountId, { network: exact.network })} size="sm" variant="brand" rightIcon={<FiArrowRight />} ml={{ sm: 'auto' }}>
-              Open
-            </Button>
+            <Text fontSize="xs" color="muted" w={{ base: 'full', sm: 'auto' }} ml={{ sm: 'auto' }}>
+              {verificationLabel(exact.data.block_height)}
+            </Text>
           </Flex>
         )}
         {params.search && exact.status === 'none' && queryKind(params.search) !== 'bare' && (

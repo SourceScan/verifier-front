@@ -1,72 +1,48 @@
-import type { NetworkType } from '@/contexts/NetworkContext'
-import { subscribeCodeHash } from '@/utils/near/codeHashQueue'
-import { useEffect, useState } from 'react'
+import { NETWORKS, type NetworkType } from '@/contexts/NetworkContext'
+import { isNearCodeHash, readViewCode } from '@/utils/near/response'
+import { fetchViewCode } from '@/utils/near/viewCode'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-/**
- * Compares the code hash recorded by the verifier with the code currently
- * deployed on-chain. Every status is reported as what it is: an RPC failure
- * is "unavailable", never a mismatch.
- */
 export type HashStatus = 'checking' | 'match' | 'mismatch' | 'no_code' | 'unavailable'
 
 export interface HashCheck {
   status: HashStatus
   onChainHash?: string
+  blockHeight?: number
 }
 
-/**
- * With `whenVisible`, the check starts only while the returned `ref` element
- * is on (or near) screen, so hidden layouts and off-screen rows cost nothing.
- */
-export function useCodeHashCheck(
-  network: NetworkType,
-  accountId: string,
-  codeHash: string | undefined,
-  options: { whenVisible?: boolean; attempt?: number } = {}
-) {
-  const { whenVisible = false, attempt = 0 } = options
-  const [check, setCheck] = useState<HashCheck>({ status: 'checking' })
-  const [node, setNode] = useState<Element | null>(null)
-  const [visible, setVisible] = useState(!whenVisible)
+const CHECKING: HashCheck = { status: 'checking' }
+
+/** Each visit and retry compares against a fresh view of the deployed code. */
+export function useCodeHashCheck(network: NetworkType, accountId: string, codeHash?: string) {
+  const [attempt, setAttempt] = useState(0)
+  const request = useMemo(() => ({ network, accountId, codeHash, attempt }), [network, accountId, codeHash, attempt])
+  const [result, setResult] = useState<{ request: typeof request; check: HashCheck }>()
 
   useEffect(() => {
-    if (!whenVisible || !node) return
-    if (typeof IntersectionObserver === 'undefined') {
-      setVisible(true)
-      return
-    }
-    const observer = new IntersectionObserver(
-      (items) => setVisible(items.some((item) => item.isIntersecting)),
-      { rootMargin: '200px 0px' }
-    )
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [whenVisible, node])
+    if (request.codeHash === undefined) return
+    const controller = new AbortController()
+    // Strict Mode can run setup and cleanup once before the real setup.
+    // Wait for cleanup before sending any request from the first setup.
+    queueMicrotask(() => {
+      if (controller.signal.aborted) return
+      fetchViewCode(NETWORKS[request.network].rpcUrl, request.accountId, controller.signal)
+        .then(readViewCode)
+        .then(({ hash, blockHeight }) => {
+          if (controller.signal.aborted) return
+          let status: HashStatus = 'unavailable'
+          if (hash === null) status = 'no_code'
+          else if (isNearCodeHash(request.codeHash)) status = hash === request.codeHash ? 'match' : 'mismatch'
+          setResult({ request, check: { status, onChainHash: hash ?? undefined, blockHeight } })
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setResult({ request, check: { status: 'unavailable' } })
+        })
+    })
+    return () => controller.abort()
+  }, [request])
 
-  useEffect(() => {
-    setCheck({ status: 'checking' })
-  }, [network, accountId, codeHash, attempt])
-
-  useEffect(() => {
-    if (!codeHash || !visible) return
-    let active = true
-    const subscription = subscribeCodeHash(network, accountId)
-    subscription.promise.then(
-      (hash) => {
-        if (!active) return
-        setCheck(
-          hash === null
-            ? { status: 'no_code' }
-            : { status: hash === codeHash ? 'match' : 'mismatch', onChainHash: hash }
-        )
-      },
-      () => active && setCheck({ status: 'unavailable' })
-    )
-    return () => {
-      active = false
-      subscription.release()
-    }
-  }, [network, accountId, codeHash, visible, attempt])
-
-  return { check, ref: setNode }
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
+  // Hide the previous verdict during render, before effect cleanup handles the old request.
+  return { check: result?.request === request ? result.check : CHECKING, retry }
 }

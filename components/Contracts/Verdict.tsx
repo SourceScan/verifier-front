@@ -7,30 +7,30 @@ import { FiAlertTriangle, FiCheckCircle, FiMinusCircle, FiXCircle } from 'react-
 const VERDICT: Record<HashStatus, { title: string; body: (_net: string) => string; icon?: IconType; tone: 'ok' | 'bad' | 'warn' | 'neutral' }> = {
   checking: {
     title: 'Checking the deployed code…',
-    body: (net) => `Comparing the verified code hash with the code deployed on ${net} now.`,
+    body: (net) => `Reading the deployed code hash at the latest final block on ${net}.`,
     tone: 'neutral',
   },
   match: {
     title: 'Deployed code matches the verified source',
-    body: (net) => `The code deployed on ${net} now has the same hash as the verified build.`,
+    body: (net) => `At the final block checked on ${net}, the deployed code has the same hash as the verified build.`,
     icon: FiCheckCircle,
     tone: 'ok',
   },
   mismatch: {
     title: 'Deployed code does not match the verified source',
-    body: () => 'This account now runs different code. The source below is the verified build, not what is deployed.',
+    body: (net) => `At the final block checked on ${net}, the deployed code has a different hash from the verified build.`,
     icon: FiXCircle,
     tone: 'bad',
   },
   no_code: {
     title: 'No code is deployed on this account',
-    body: () => 'The source below was verified, but nothing is deployed on this account now.',
+    body: (net) => `No contract code was found for this account at the final block checked on ${net}.`,
     icon: FiMinusCircle,
     tone: 'bad',
   },
   unavailable: {
-    title: 'The deployed code could not be checked',
-    body: () => 'The RPC did not return this account’s code. This is neither a match nor a mismatch.',
+    title: 'Deployed code status unknown',
+    body: (net) => `SourceScan couldn’t determine whether the deployed code on ${net} matches the verified build.`,
     icon: FiAlertTriangle,
     tone: 'warn',
   },
@@ -44,6 +44,7 @@ const TONE = {
 }
 
 export const verdictTone = (status: HashStatus) => TONE[VERDICT[status].tone]
+export const verdictSummary = (status: HashStatus, networkName: string) => VERDICT[status].body(networkName)
 
 function HashLine(props: { label: string; value?: string; placeholder: string; copyLabel: string }) {
   return (
@@ -91,6 +92,12 @@ export default function Verdict(props: { check: HashCheck; verifiedHash: string;
           <Box as="dl" mt={3} display="grid" gridTemplateColumns={{ base: 'minmax(0, 1fr)', sm: 'auto minmax(0, 1fr)' }} columnGap={4} rowGap={1}>
             <HashLine label="Verified code hash" value={props.verifiedHash} placeholder="" copyLabel="Copy verified code hash" />
             <HashLine label="Deployed code hash" value={props.check.onChainHash} placeholder={deployedPlaceholder} copyLabel="Copy deployed code hash" />
+            {props.check.blockHeight !== undefined && (
+              <>
+                <Box as="dt" color="muted" fontSize="sm">Checked at final block</Box>
+                <Box as="dd" fontSize="sm" fontFamily="mono">#{props.check.blockHeight}</Box>
+              </>
+            )}
           </Box>
         </Box>
         {props.check.status === 'unavailable' && (
