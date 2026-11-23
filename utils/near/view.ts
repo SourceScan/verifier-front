@@ -11,36 +11,8 @@ import { classify, failure, isRpcFailure } from './rpcErrors'
  * view_code fallback instead names the block hash of a view_account answer).
  */
 
-export type RpcErrorKind =
-  | 'unknown_account'
-  | 'no_contract_code'
-  | 'execution_error'
-  | 'unavailable'
-
-export interface RpcFailure extends Error {
-  kind: RpcErrorKind
-}
-
-const failure = (kind: RpcErrorKind, message: string): RpcFailure =>
-  Object.assign(new Error(message), { kind })
-
-export const isRpcFailure = (error: unknown): error is RpcFailure =>
-  error instanceof Error && 'kind' in error
-
-const classify = (error: any): RpcFailure => {
-  const cause = String(error?.cause?.name ?? '')
-  const detail = String(error?.data ?? error?.message ?? '')
-  if (cause === 'UNKNOWN_ACCOUNT' || /does not exist while viewing/.test(detail))
-    return failure('unknown_account', detail)
-  if (
-    cause === 'NO_CONTRACT_CODE' ||
-    /has never been observed on the node/.test(detail)
-  )
-    return failure('no_contract_code', detail)
-  if (cause === 'CONTRACT_EXECUTION_ERROR' || /wasm execution failed|Function call returned an error/i.test(detail))
-    return failure('execution_error', detail)
-  return failure('unavailable', detail || 'RPC request failed')
-}
+export type { RpcErrorKind, RpcFailure } from './rpcErrors'
+export { isRpcFailure }
 
 const encodeArgs = (args: unknown): string => {
   const utf8 = new TextEncoder().encode(JSON.stringify(args))
