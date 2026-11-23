@@ -1,7 +1,6 @@
 import { NETWORKS, NetworkType, useNetwork } from '@/contexts/NetworkContext'
 import { ContractData, isContractData } from '@/utils/contracts'
-import { isRpcFailure } from '@/utils/near/response'
-import { viewFunction } from '@/utils/near/view'
+import { isRpcFailure, viewFunction } from '@/utils/near/view'
 import { useCallback, useEffect, useState } from 'react'
 
 const TTL_MS = 60 * 1000

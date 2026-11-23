@@ -1,8 +1,7 @@
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
 const { verificationLabel } = require('../utils/contracts.ts')
-const { readViewCode } = require('../utils/near/response.ts')
-const { fetchViewCode } = require('../utils/near/viewCode.ts')
+const { viewCode, viewFunction } = require('../utils/near/view.ts')
 const { fetchRegistryCount } = require('../utils/registryCount.ts')
 
 const hash = '56xEo2LorUFVNbkFhCncFSWNiobdp1kzm14nZ47b5JVW'
@@ -62,71 +61,166 @@ test('a failed or aborted count fetch can be retried', async (t) => {
   assert.equal(await fetchRegistryCount('mainnet', new AbortController().signal), 12)
 })
 
-test('view_code sends one credential-free JSON request to the selected public RPC', async (t) => {
-  const payload = { result: { hash, block_height: 200 } }
+function assertRpcRequest(fetchMock, network, signal, params) {
+  assert.equal(fetchMock.mock.callCount(), 1)
+  const [url, init] = fetchMock.mock.calls[0].arguments
+  assert.equal(url, `https://rpc.${network}.near.org`)
+  assert.equal(init.method, 'POST')
+  assert.deepEqual(init.headers, { 'Content-Type': 'application/json' })
+  assert.equal(init.credentials, 'omit')
+  assert.equal(init.cache, 'no-store')
+  assert.equal(init.redirect, 'error')
+  assert.equal(init.signal, signal)
+  assert.deepEqual(JSON.parse(init.body), {
+    jsonrpc: '2.0',
+    id: 'query',
+    method: 'query',
+    params: { ...params, finality: 'final' },
+  })
+  fetchMock.mock.resetCalls()
+}
+
+function viewFunctionResult(value) {
+  return { result: { result: Array.from(Buffer.from(JSON.stringify(value), 'utf8')) } }
+}
+
+test('registry lists, search, records, and source metadata query the public RPC on both networks', async (t) => {
+  let payload
   const fetchMock = t.mock.method(globalThis, 'fetch', async () => Response.json(payload))
+  const { signal } = new AbortController()
+
+  for (const [network, suffix] of [['mainnet', 'near'], ['testnet', 'testnet']]) {
+    const registry = `v2-verifier.sourcescan.${suffix}`
+    const accountId = `example.${suffix}`
+    const page = { from_index: 10, limit: 10 }
+    const requests = [
+      ['get_contracts', registry, page, [[{ account_id: accountId }], 2]],
+      ['search', registry, { ...page, key: 'café' }, [[], 0]],
+      ['get_contract', registry, { account_id: accountId }, null],
+      ['contract_source_metadata', accountId, undefined, { version: 'café' }],
+    ]
+
+    for (const [method, target, args, value] of requests) {
+      payload = viewFunctionResult(value)
+      assert.deepEqual(await viewFunction(network, target, method, args, signal), value)
+      assertRpcRequest(fetchMock, network, signal, {
+        request_type: 'call_function',
+        account_id: target,
+        method_name: method,
+        args_base64: args === undefined ? '' : Buffer.from(JSON.stringify(args), 'utf8').toString('base64'),
+      })
+    }
+  }
+})
+
+test('view_code sends one credential-free JSON request to the selected public RPC', async (t) => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => Response.json({ result: { hash, block_height: 200 } }))
+  const { signal } = new AbortController()
 
   for (const network of ['mainnet', 'testnet']) {
-    const rpcUrl = `https://rpc.${network}.near.org`
     const accountId = `example.${network === 'mainnet' ? 'near' : 'testnet'}`
-    const { signal } = new AbortController()
-    const offset = fetchMock.mock.callCount()
-    const data = await fetchViewCode(rpcUrl, accountId, signal)
-
-    assert.deepEqual(readViewCode(data), { hash, blockHeight: 200 })
-    assert.equal(fetchMock.mock.callCount(), offset + 1)
-    const [url, init] = fetchMock.mock.calls[offset].arguments
-    assert.equal(url, rpcUrl)
-    assert.equal(init.method, 'POST')
-    assert.deepEqual(init.headers, { 'Content-Type': 'application/json' })
-    assert.equal(init.credentials, 'omit')
-    assert.equal(init.cache, 'no-store')
-    assert.equal(init.redirect, 'error')
-    assert.equal(init.signal, signal)
-    assert.deepEqual(JSON.parse(init.body), {
-      jsonrpc: '2.0',
-      id: 'view-code',
-      method: 'query',
-      params: { request_type: 'view_code', account_id: accountId, finality: 'final' },
-    })
+    assert.deepEqual(await viewCode(network, accountId, signal), { hash, blockHeight: 200 })
+    assertRpcRequest(fetchMock, network, signal, { request_type: 'view_code', account_id: accountId })
   }
 })
 
 test('an HTTP failure sends no fallback request and a retry reads a fresh block', async (t) => {
-  const rpcUrl = 'https://rpc.mainnet.near.org'
   const fetchMock = t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 503 }))
   const { signal } = new AbortController()
 
-  await assert.rejects(fetchViewCode(rpcUrl, 'example.near', signal), /RPC request failed/)
+  await assert.rejects(viewCode('mainnet', 'example.near', signal), { kind: 'unavailable' })
   assert.equal(fetchMock.mock.callCount(), 1)
 
   fetchMock.mock.mockImplementation(async () => Response.json({ result: { hash, block_height: 201 } }))
-  const data = await fetchViewCode(rpcUrl, 'example.near', new AbortController().signal)
+  assert.deepEqual(await viewCode('mainnet', 'example.near', new AbortController().signal), { hash, blockHeight: 201 })
   assert.equal(fetchMock.mock.callCount(), 2)
-  assert.equal(readViewCode(data).blockHeight, 201)
 })
 
-test('view_code uses the response block only when it is valid', () => {
-  assert.deepEqual(readViewCode({ result: { hash, block_height: 200 } }), { hash, blockHeight: 200 })
+test('fetch and JSON body failures remain unavailable', async (t) => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => { throw new TypeError('Failed to fetch') })
+  const read = () => viewFunction('mainnet', 'example.near', 'contract_source_metadata')
+
+  await assert.rejects(read(), { kind: 'unavailable' })
+  fetchMock.mock.mockImplementation(async () => new Response('Invalid JSON'))
+  await assert.rejects(read(), { kind: 'unavailable' })
+  assert.equal(fetchMock.mock.callCount(), 2)
+})
+
+test('an aborted view call preserves the abort reason and can be retried', async (t) => {
+  const controller = new AbortController()
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (_url, { signal }) => {
+    assert.equal(signal, controller.signal)
+    return new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+    })
+  })
+
+  const read = (signal) => viewFunction('testnet', 'example.testnet', 'contract_source_metadata', undefined, signal)
+  const pending = read(controller.signal)
+  controller.abort()
+  await assert.rejects(pending, (error) => error === controller.signal.reason)
+  assert.equal(fetchMock.mock.callCount(), 1)
+
+  const metadata = { version: '1.0.0' }
+  fetchMock.mock.mockImplementation(async () => Response.json(viewFunctionResult(metadata)))
+  assert.deepEqual(await read(new AbortController().signal), metadata)
+  assert.equal(fetchMock.mock.callCount(), 2)
+})
+
+test('view calls preserve query errors and reject malformed results', async (t) => {
+  let payload
+  t.mock.method(globalThis, 'fetch', async () => Response.json(payload))
+  const read = () => viewFunction('testnet', 'example.testnet', 'contract_source_metadata')
+
+  payload = { error: { cause: { name: 'UNKNOWN_ACCOUNT' } } }
+  await assert.rejects(read(), { kind: 'unknown_account' })
+  payload = { result: { error: 'Function call returned an error: MethodNotFound' } }
+  await assert.rejects(read(), { kind: 'execution_error' })
+  payload = { error: { cause: { name: 'UNKNOWN_BLOCK' } } }
+  await assert.rejects(read(), { kind: 'unavailable' })
+  payload = { result: {} }
+  await assert.rejects(read(), { kind: 'unavailable', message: 'Unexpected view call result' })
+  payload = { result: { result: [] } }
+  await assert.rejects(read(), { kind: 'unavailable', message: 'View call returned invalid JSON' })
+})
+
+test('view_code uses the response block only when it is valid', async (t) => {
+  let result
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ result }))
+  const read = () => viewCode('mainnet', 'example.near', new AbortController().signal)
+
   for (const block_height of [undefined, -1, 1.25, '200', Number.MAX_SAFE_INTEGER + 1]) {
-    assert.deepEqual(readViewCode({ result: { hash, block_height } }), { hash, blockHeight: undefined })
+    result = { hash, block_height }
+    assert.deepEqual(await read(), { hash, blockHeight: undefined })
   }
-  assert.throws(() => readViewCode({ result: { hash: 'malformed', block_height: 200 } }), { kind: 'unavailable' })
+  result = { hash: 'malformed', block_height: 200 }
+  await assert.rejects(read(), { kind: 'unavailable' })
 })
 
-test('view_code preserves explicit account and code absence', () => {
+test('view_code preserves explicit account and code absence', async (t) => {
+  let payload
+  t.mock.method(globalThis, 'fetch', async () => Response.json(payload))
+  const read = () => viewCode('mainnet', 'example.near', new AbortController().signal)
+
   for (const name of ['UNKNOWN_ACCOUNT', 'NO_CONTRACT_CODE']) {
-    const error = { cause: { name, info: { block_height: 200 } } }
-    assert.deepEqual(readViewCode({ error }), { hash: null, blockHeight: 200 })
+    payload = { error: { cause: { name, info: { block_height: 200 } } } }
+    assert.deepEqual(await read(), { hash: null, blockHeight: 200 })
   }
-  const data = 'Contract code for contract ID #example.near has never been observed on the node'
-  assert.deepEqual(readViewCode({ error: { data } }), { hash: null, blockHeight: undefined })
+  const error = 'Contract code for contract ID #example.near has never been observed on the node'
+  payload = { result: { error, block_height: 201 } }
+  assert.deepEqual(await read(), { hash: null, blockHeight: 201 })
 })
 
-test('an unavailable block or provider error is never reported as code absence', () => {
+test('an unavailable block or provider error is never reported as code absence', async (t) => {
+  let error
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ error }))
+  const read = () => viewCode('mainnet', 'example.near', new AbortController().signal)
+
   const data = 'Block either has never been observed on the node or has been garbage collected'
-  assert.throws(() => readViewCode({ error: { data } }), { kind: 'unavailable' })
-  const error = { cause: { name: 'UNKNOWN_BLOCK' }, data }
-  assert.throws(() => readViewCode({ error }), { kind: 'unavailable' })
-  assert.throws(() => readViewCode({ error: { message: 'provider timeout' } }), { kind: 'unavailable' })
+  error = { data }
+  await assert.rejects(read(), { kind: 'unavailable' })
+  error = { cause: { name: 'UNKNOWN_BLOCK' }, data }
+  await assert.rejects(read(), { kind: 'unavailable' })
+  error = { message: 'provider timeout' }
+  await assert.rejects(read(), { kind: 'unavailable' })
 })

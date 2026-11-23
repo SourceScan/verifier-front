@@ -16,11 +16,11 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
 
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+## Network requests
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
+The browser sends registry list, search, record lookup, source metadata, and deployed-code queries directly to the public NEAR RPC for Mainnet or Testnet with `finality: 'final'`. The registry rows show recorded verifications. The contract workspace checks deployed code when opened, including through legacy `/code` links.
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+Registry totals come from the REST API configured by `NEXT_PUBLIC_API_HOST`. IPFS source snapshots use the app's `/api/proxy-ipfs` route.
 
 ## Learn More
 

@@ -1,6 +1,5 @@
-import { NETWORKS, type NetworkType } from '@/contexts/NetworkContext'
-import { isNearCodeHash, readViewCode } from '@/utils/near/response'
-import { fetchViewCode } from '@/utils/near/viewCode'
+import type { NetworkType } from '@/contexts/NetworkContext'
+import { isNearCodeHash, viewCode } from '@/utils/near/view'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 export type HashStatus = 'checking' | 'match' | 'mismatch' | 'no_code' | 'unavailable'
@@ -26,8 +25,7 @@ export function useCodeHashCheck(network: NetworkType, accountId: string, codeHa
     // Wait for cleanup before sending any request from the first setup.
     queueMicrotask(() => {
       if (controller.signal.aborted) return
-      fetchViewCode(NETWORKS[request.network].rpcUrl, request.accountId, controller.signal)
-        .then(readViewCode)
+      viewCode(request.network, request.accountId, controller.signal)
         .then(({ hash, blockHeight }) => {
           if (controller.signal.aborted) return
           let status: HashStatus = 'unavailable'
