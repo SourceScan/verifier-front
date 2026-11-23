@@ -1,8 +1,8 @@
 import type { NetworkType } from '@/contexts/NetworkContext'
 
 const RPC_URLS: Record<NetworkType, string> = {
-  mainnet: 'https://rpc.mainnet.near.org',
-  testnet: 'https://rpc.testnet.near.org',
+  mainnet: 'https://near.drpc.org',
+  testnet: 'https://near-testnet.drpc.org',
 }
 
 type RpcErrorKind = 'unknown_account' | 'no_contract_code' | 'execution_error' | 'unavailable'

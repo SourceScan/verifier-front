@@ -62,9 +62,13 @@ test('a failed or aborted count fetch can be retried', async (t) => {
 })
 
 function assertRpcRequest(fetchMock, network, signal, params) {
+  const endpoints = {
+    mainnet: 'https://near.drpc.org',
+    testnet: 'https://near-testnet.drpc.org',
+  }
   assert.equal(fetchMock.mock.callCount(), 1)
   const [url, init] = fetchMock.mock.calls[0].arguments
-  assert.equal(url, `https://rpc.${network}.near.org`)
+  assert.equal(url, endpoints[network])
   assert.equal(init.method, 'POST')
   assert.deepEqual(init.headers, { 'Content-Type': 'application/json' })
   assert.equal(init.credentials, 'omit')

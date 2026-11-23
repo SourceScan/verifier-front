@@ -18,7 +18,9 @@ You can start editing the page by modifying `pages/index.tsx`. The page auto-upd
 
 ## Network requests
 
-The browser sends registry list, search, record lookup, source metadata, and deployed-code queries directly to the public NEAR RPC for Mainnet or Testnet with `finality: 'final'`. The registry rows show recorded verifications. The contract workspace checks deployed code when opened, including through legacy `/code` links.
+The browser sends registry list, search, record lookup, source metadata, and deployed-code queries directly to dRPC with `finality: 'final'`. The public, keyless endpoints are `https://near.drpc.org` for Mainnet and `https://near-testnet.drpc.org` for Testnet. [NEAR RPC provider list](https://docs.near.org/api/rpc/providers)
+
+The registry rows show recorded verifications. The contract workspace checks deployed code when opened, including through legacy `/code` links.
 
 Registry totals come from the REST API configured by `NEXT_PUBLIC_API_HOST`. IPFS source snapshots use the app's `/api/proxy-ipfs` route.
 
