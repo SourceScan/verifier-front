@@ -2,6 +2,7 @@ import { NETWORKS, NetworkType, useNetwork } from '@/contexts/NetworkContext'
 import { fetchContractRecord } from '@/hooks/useContract'
 import { ContractData, ContractEntry, isContractEntry } from '@/utils/contracts'
 import { viewFunction } from '@/utils/near/view'
+import { fetchRegistryCount } from '@/utils/registryCount'
 import { contractSearchKey, lookupNetworks, queryKind } from '@/utils/registrySearch'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -94,18 +95,7 @@ export type RegistryCount =
 const counts = new Map<string, { at: number; count: number }>()
 const countKey = (network: NetworkType) => `${network}|${NETWORKS[network].contract}`
 
-/** `get_contracts_count` returns a u64; accept a JSON number or a decimal string, nothing else. */
-const parseCount = (value: unknown): number | null => {
-  const n = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value
-  return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0 ? n : null
-}
-
-/**
- * Total verified contracts in the selected network's registry, read from the
- * contract's own `get_contracts_count` (not a page length or page estimate).
- * It does not depend on search or paging, and a count is only ever returned
- * for the network it was read from.
- */
+/** The backend's registry total for the selected network, independent of search and paging. */
 export function useRegistryCount() {
   const { network, isReady } = useNetwork()
   const key = countKey(network)
@@ -121,21 +111,18 @@ export function useRegistryCount() {
     setState({ key, value: hit ? { status: 'ready', count: hit.count } : { status: 'loading' } })
     if (hit && Date.now() - hit.at < TTL_MS) return
     const controller = new AbortController()
-    viewFunction<unknown>(network, NETWORKS[network].contract, 'get_contracts_count', undefined, controller.signal)
-      .then((raw) => {
-        const count = parseCount(raw)
-        if (count === null) throw new Error('Unexpected registry count')
+    fetchRegistryCount(network, controller.signal)
+      .then((count) => {
+        if (controller.signal.aborted) return
         counts.set(key, { at: Date.now(), count })
-        if (!controller.signal.aborted) setState({ key, value: { status: 'ready', count } })
+        setState({ key, value: { status: 'ready', count } })
       })
       .catch(() => {
         // A failed refresh keeps this network's last known count.
         if (!controller.signal.aborted && !hit) setState({ key, value: { status: 'unavailable' } })
       })
     return () => controller.abort()
-    // `key` captures the network and its registry contract
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isReady, key, attempt])
+  }, [isReady, key, network, attempt])
 
   const retry = useCallback(() => setAttempt((n) => n + 1), [])
   const count: RegistryCount = isReady && state.key === key ? state.value : { status: 'loading' }

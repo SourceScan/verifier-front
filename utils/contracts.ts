@@ -20,5 +20,17 @@ export const isContractData = (value: unknown): value is ContractData =>
 export const isContractEntry = (value: unknown): value is ContractEntry =>
   Array.isArray(value) && typeof value[0] === 'string' && isContractData(value[1])
 
+export function recordedBlock(height: unknown): string | undefined {
+  if (typeof height === 'number' && Number.isSafeInteger(height) && height >= 0)
+    return `#${height}`
+  if (typeof height === 'string' && /^\d{1,20}$/.test(height))
+    return `#${height}`
+}
+
+export function verificationLabel(height: unknown): string {
+  const block = recordedBlock(height)
+  return block === undefined ? 'Verification recorded' : `Verified at ${block}`
+}
+
 export const langLabel = (lang?: string) =>
   lang === 'rust' ? 'Rust' : lang === 'ts' ? 'TypeScript' : lang || 'Unknown'

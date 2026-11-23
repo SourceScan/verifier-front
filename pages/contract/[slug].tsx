@@ -50,8 +50,7 @@ function Workspace({ accountId }: { accountId: string }) {
   const { load, retry } = useContractRecord(accountId, netState === 'ready')
   const data = netState === 'ready' && load.status === 'ready' ? load.data : null
   const metadata = useSourceMetadata(accountId, !!data)
-  const [hashAttempt, setHashAttempt] = useState(0)
-  const { check } = useCodeHashCheck(network, accountId, data?.code_hash, { attempt: hashAttempt })
+  const { check, retry: retryHashCheck } = useCodeHashCheck(network, accountId, data?.code_hash)
 
   const headingRef = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
@@ -165,7 +164,7 @@ function Workspace({ accountId }: { accountId: string }) {
     body = (
       <>
         {data ? (
-          <Verdict check={check} verifiedHash={data.code_hash} networkName={networkConfig.name} onRetry={() => setHashAttempt((n) => n + 1)} />
+          <Verdict check={check} verifiedHash={data.code_hash} networkName={networkConfig.name} onRetry={retryHashCheck} />
         ) : (
           <VerdictPending label="Loading the verification record…" />
         )}
