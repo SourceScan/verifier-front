@@ -33,7 +33,7 @@ export default function EvidencePane(props: {
       <Fields>
         <Field label="Verdict">{hashStatusText(check.status).detail}</Field>
         <Field label="Method">
-          The deployed code hash comes from a <Mono>view_code</Mono> query at the latest final block on {NETWORKS[network].name}; it is compared with the code hash recorded in the SourceScan registry.
+          The deployed code hash comes from a <Mono>view_account</Mono> query at the latest final block on {NETWORKS[network].name}, or from <Mono>view_code</Mono> at that same block when the account has no local code hash (no code, or a global contract referenced by account); it is compared with the code hash recorded in the SourceScan registry.
         </Field>
         <Field label="Verified code hash">
           <HStack spacing={1} align="flex-start">

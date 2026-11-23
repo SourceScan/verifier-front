@@ -1,8 +1,7 @@
 import axios from 'axios'
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { NETWORKS } from '@/contexts/NetworkContext'
-
-const registryReads = new Set(['get_contract', 'get_contracts', 'get_contracts_count', 'search'])
+import { allowedRpcBody } from '@/utils/near/rpcAllowlist'
 
 export default async function handler(
   req: NextApiRequest,
@@ -20,19 +19,9 @@ export default async function handler(
     if (network !== 'testnet' && network !== 'mainnet') {
       return res.status(400).json({ error: 'Invalid network' })
     }
-    const body = req.body
-    const params = body?.params
-    const allowedCall =
-      params?.request_type === 'call_function' &&
-      (params.method_name === 'contract_source_metadata' ||
-        (params.account_id === NETWORKS[network].contract &&
-          registryReads.has(params.method_name)))
-    if (
-      body?.jsonrpc !== '2.0' ||
-      body.method !== 'query' ||
-      typeof params?.account_id !== 'string' ||
-      (params.request_type !== 'view_code' && !allowedCall)
-    ) {
+    // Only the app's own read-only queries, rebuilt from validated fields.
+    const body = allowedRpcBody(req.body, NETWORKS[network].contract)
+    if (!body) {
       return res.status(400).json({ error: 'Unsupported RPC request' })
     }
 

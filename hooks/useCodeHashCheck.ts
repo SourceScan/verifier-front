@@ -1,6 +1,9 @@
 import type { NetworkType } from '@/contexts/NetworkContext'
-import { subscribeCodeHash } from '@/utils/near/codeHashQueue'
+import { createCodeHashQueue } from '@/utils/near/codeHashQueue'
+import { viewDeployedCodeHash } from '@/utils/near/view'
 import { useEffect, useState } from 'react'
+
+const codeHashes = createCodeHashQueue(viewDeployedCodeHash)
 
 /**
  * Compares the code hash recorded by the verifier with the code currently
@@ -17,14 +20,16 @@ export interface HashCheck {
 /**
  * With `whenVisible`, the check starts only while the returned `ref` element
  * is on (or near) screen, so hidden layouts and off-screen rows cost nothing.
+ * With `fresh`, a completed answer (e.g. a registry row's, reused for a few
+ * minutes) is never reused: the chain is read again.
  */
 export function useCodeHashCheck(
   network: NetworkType,
   accountId: string,
   codeHash: string | undefined,
-  options: { whenVisible?: boolean; attempt?: number } = {}
+  options: { whenVisible?: boolean; attempt?: number; fresh?: boolean } = {}
 ) {
-  const { whenVisible = false, attempt = 0 } = options
+  const { whenVisible = false, attempt = 0, fresh = false } = options
   const [check, setCheck] = useState<HashCheck>({ status: 'checking' })
   const [node, setNode] = useState<Element | null>(null)
   const [visible, setVisible] = useState(!whenVisible)
@@ -50,7 +55,7 @@ export function useCodeHashCheck(
   useEffect(() => {
     if (!codeHash || !visible) return
     let active = true
-    const subscription = subscribeCodeHash(network, accountId)
+    const subscription = codeHashes.subscribe(network, accountId, { fresh })
     subscription.promise.then(
       (hash) => {
         if (!active) return
@@ -66,7 +71,7 @@ export function useCodeHashCheck(
       active = false
       subscription.release()
     }
-  }, [network, accountId, codeHash, visible, attempt])
+  }, [network, accountId, codeHash, visible, attempt, fresh])
 
   return { check, ref: setNode }
 }

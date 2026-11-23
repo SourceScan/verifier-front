@@ -51,7 +51,8 @@ function Workspace({ accountId }: { accountId: string }) {
   const data = netState === 'ready' && load.status === 'ready' ? load.data : null
   const metadata = useSourceMetadata(accountId, !!data)
   const [hashAttempt, setHashAttempt] = useState(0)
-  const { check } = useCodeHashCheck(network, accountId, data?.code_hash, { attempt: hashAttempt })
+  // Always a new chain read: never a registry row's answer from minutes ago.
+  const { check } = useCodeHashCheck(network, accountId, data?.code_hash, { attempt: hashAttempt, fresh: true })
 
   const headingRef = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
