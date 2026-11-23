@@ -1,536 +1,254 @@
-import { GithubDto } from '@/Interfaces/github/github.dto'
-import { useNetwork } from '@/contexts/NetworkContext'
-import { detectNetworkFromAddress, isValidNearAccount } from '@/utils/detectNetwork'
-import { extractGitHubDetails } from '@/utils/extractGithub'
-import { ascii_to_str } from '@/utils/near/ascii_converter'
-import { useRpcUrl } from '@/utils/near/rpc'
-import { CheckIcon, CloseIcon, ExternalLinkIcon } from '@chakra-ui/icons'
-import {
-  Flex,
-  HStack,
-  Heading,
-  Link,
-  Skeleton,
-  Spinner,
-  Stack,
-  Text,
-  useToast,
-} from '@chakra-ui/react'
-import { useRouter } from 'next/router'
-import { useEffect, useState } from 'react'
-
-import CidLink from '@/components/Common/CidLink'
-import DefaultHeading from '@/components/Common/DefaultHeading'
-import GithubLink from '@/components/Common/GithubLink'
-import IconLink from '@/components/Common/IconLink'
+import CopyButton from '@/components/Common/CopyButton'
+import NetworkPill from '@/components/Common/NetworkPill'
 import PageHead from '@/components/Common/PageHead'
-import PageRefresh from '@/components/Common/PageRefresh'
-import { getDockerHubLink, getImageNameAndDigest } from '@/utils/getDockerHub'
-import axios from 'axios'
+import StatePanel from '@/components/Common/StatePanel'
+import Verdict, { VerdictPending } from '@/components/Contracts/Verdict'
+import BuildPane from '@/components/Workspace/BuildPane'
+import EvidencePane from '@/components/Workspace/EvidencePane'
+import SourcePane from '@/components/Workspace/SourcePane'
+import { NetworkType, useNetwork } from '@/contexts/NetworkContext'
+import { GithubDto } from '@/Interfaces/github/github.dto'
+import { useAccountNetwork } from '@/hooks/useAccountNetwork'
+import { useCodeHashCheck } from '@/hooks/useCodeHashCheck'
+import { useContractRecord, useSourceMetadata } from '@/hooks/useContract'
+import { langLabel } from '@/utils/contracts'
+import { detectNetworkFromAddress } from '@/utils/detectNetwork'
+import { extractGitHubDetails } from '@/utils/extractGithub'
+import { hasClientNavigated, registryUrl } from '@/utils/navigation'
+import { githubEntryPath } from '@/utils/sourceFiles'
+import { explorerContractUrl, workspaceHref } from '@/utils/urls'
+import { Badge, Box, Button, Container, Flex, Heading, HStack, Icon, Link, VisuallyHidden } from '@chakra-ui/react'
+import NextLink from 'next/link'
+import { useRouter } from 'next/router'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { FiArrowLeft, FiArrowUpRight } from 'react-icons/fi'
 
-export default function Contract() {
-  const toast = useToast()
+type Tab = 'source' | 'evidence' | 'build'
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'source', label: 'Verified source' },
+  { id: 'evidence', label: 'Evidence' },
+  { id: 'build', label: 'Build' },
+]
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
+const asTab = (v?: string): Tab => (v === 'evidence' || v === 'build' ? v : 'source')
+
+/** One contract workspace for /contract/{id} and the legacy /code/{id}. */
+export default function WorkspacePage() {
   const router = useRouter()
-  const accountId = router.query.slug as string
-  const { networkConfig, network, setNetwork } = useNetwork()
-  const rpcUrl = useRpcUrl()
+  const slug = one(router.query.slug) ?? ''
+  // A genuinely different account gets a fresh workspace (no state carries over).
+  return <Workspace key={slug} accountId={slug} />
+}
 
-  const [data, setData] = useState<any>(null)
-  const [metadata, setMetadata] = useState<any>(null)
-  const [wasmMatch, setWasmMatch] = useState<boolean | null>(null)
-  const [wasmError, setWasmError] = useState<string | null>(null)
-  const [txError, setTxError] = useState<string | null>(null)
-  const [github, setGithub] = useState<GithubDto | null>(null)
-  const [loadingLinks, setLoadingLinks] = useState(true)
-  const [githubAvailable, setGithubAvailable] = useState(true)
-  const [ipfsAvailable, setIpfsAvailable] = useState(true)
-  const [ipfsChecked, setIpfsChecked] = useState(false)
-  const [networkDetected, setNetworkDetected] = useState(false)
-  const [loading, setLoading] = useState(true)
+function Workspace({ accountId }: { accountId: string }) {
+  const router = useRouter()
+  const { network, networkConfig } = useNetwork()
+  const networkParam = one(router.query.network)
+  const tab = asTab(one(router.query.tab))
+  const requestedFile = one(router.query.file) ?? null
+  const netState = useAccountNetwork(accountId || undefined, networkParam)
+  const { load, retry } = useContractRecord(accountId, netState === 'ready')
+  const data = netState === 'ready' && load.status === 'ready' ? load.data : null
+  const metadata = useSourceMetadata(accountId, !!data)
+  const [hashAttempt, setHashAttempt] = useState(0)
+  const { check } = useCodeHashCheck(network, accountId, data?.code_hash, { attempt: hashAttempt })
 
-  // Mark network detection as complete after a network change
+  const headingRef = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
-    if (accountId && !networkDetected) {
-      if (!isValidNearAccount(accountId)) return
+    // Arriving at an account from inside the app: show and announce its heading.
+    if (!hasClientNavigated()) return
+    window.scrollTo(0, 0)
+    headingRef.current?.focus({ preventScroll: true })
+  }, [])
 
-      const detectedNetwork = detectNetworkFromAddress(accountId)
-      if (!detectedNetwork || detectedNetwork === network) {
-        setNetworkDetected(true)
+  const [backHref, setBackHref] = useState('/')
+  useEffect(() => setBackHref(registryUrl()), [])
+
+  const github = useMemo<GithubDto | null>(() => {
+    const snapshot = metadata.status === 'ready' ? metadata.metadata.build_info?.source_code_snapshot : undefined
+    if (snapshot) {
+      try {
+        return extractGitHubDetails(snapshot)
+      } catch {
+        // fall through to the registry record
       }
     }
-  }, [network, accountId, networkDetected])
+    const g = data?.github
+    return g && g.owner && g.repo && g.sha ? g : null
+  }, [metadata, data])
 
-  // Step 2: Only fetch data after network detection is complete
+  const contractPathMeta = metadata.status === 'ready' ? metadata.metadata.build_info?.contract_path : undefined
+  const rootPath = metadata.status === 'loading' ? null : contractPathMeta || '/'
+  const entryFile = github ? githubEntryPath(contractPathMeta, data?.lang) : ''
+  const entryFileUrl = github ? `https://github.com/${github.owner}/${github.repo}/blob/${github.sha}/${entryFile}` : null
+
+  const linkNetwork = detectNetworkFromAddress(accountId) ? undefined : network
+  const hrefFor = (opts: { tab?: Tab; file?: string | null }) => {
+    // Stay on the legacy /code route when the user came in through it.
+    const base = router.pathname === '/code/[slug]' ? '/code' : '/contract'
+    return workspaceHref(accountId, { network: linkNetwork, tab: opts.tab ?? tab, file: opts.file ?? undefined }, base)
+  }
+  const replaceQuery = (opts: { tab?: Tab; file?: string | null }) =>
+    void router.replace(hrefFor(opts), undefined, { shallow: true, scroll: false })
+
+  // Keep the address truthful once the network is settled: implicit and
+  // deterministic accounts always carry the network they are read from (so
+  // Back/Forward and shared links reopen it), named accounts never carry one.
   useEffect(() => {
-    if (
-      !accountId ||
-      !networkConfig ||
-      !networkDetected ||
-      !isValidNearAccount(accountId)
-    ) {
-      return
-    }
+    if (netState !== 'ready' || !router.isReady) return
+    if ((networkParam ?? '') === (linkNetwork ?? '') && !Array.isArray(router.query.network)) return
+    replaceQuery({ file: requestedFile })
+    // hrefFor/replaceQuery are derived from the values listed here
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [netState, router.isReady, networkParam, linkNetwork])
 
-    console.log(
-      `Fetching contract data for ${accountId} on ${networkConfig.name}`
+  const pageTitle = `${accountId} on SourceScan`
+  const nearblocks = explorerContractUrl(network, accountId)
+
+  let body: React.ReactNode
+  if (netState === 'unknown_network') {
+    const shown = (networkParam ?? '').slice(0, 40)
+    body = (
+      <StatePanel
+        tone="warning"
+        title="This link names an unknown network"
+        action={
+          <HStack justify="center" spacing={2} flexWrap="wrap">
+            <Button as={NextLink} href={workspaceHref(accountId, { network: 'mainnet', tab, file: requestedFile ?? undefined })} variant="quiet">
+              Open on Mainnet
+            </Button>
+            <Button as={NextLink} href={workspaceHref(accountId, { network: 'testnet', tab, file: requestedFile ?? undefined })} variant="quiet">
+              Open on Testnet
+            </Button>
+          </HStack>
+        }
+      >
+        “{shown}” is not a NEAR network. This account ID can exist on Mainnet and on Testnet, so choose which record to open.
+      </StatePanel>
     )
-
-    // Use the contract address based on the current network
-    const contractAddress = networkConfig.contract
-    console.log(`Using contract address: ${contractAddress}`)
-
-    // Add a timeout to prevent infinite loading
-    const timeoutId = setTimeout(() => {
-      if (!data) {
-        console.log('Loading timeout triggered after 15 seconds')
-        setLoading(false)
-      }
-    }, 15000)
-
-    axios
-      .post(
-        rpcUrl,
-        {
-          jsonrpc: '2.0',
-          id: 'dontcare',
-          method: 'query',
-          params: {
-            request_type: 'call_function',
-            finality: 'final',
-            account_id: contractAddress,
-            method_name: 'get_contract',
-            args_base64: Buffer.from(`{"account_id": "${accountId}"}`).toString(
-              'base64'
-            ),
-          },
-        },
-        {
-          headers: {
-            'X-Network': networkConfig.name.toLowerCase(),
-          },
+  } else if (netState === 'invalid') {
+    body = (
+      <StatePanel tone="warning" title="Invalid account ID" action={<Button as={NextLink} href="/" variant="quiet">Look up another account</Button>}>
+        “{accountId}” is not a valid NEAR account ID.
+      </StatePanel>
+    )
+  } else if (load.status === 'not_found' && netState === 'ready') {
+    const other: NetworkType = network === 'mainnet' ? 'testnet' : 'mainnet'
+    const ambiguous = !detectNetworkFromAddress(accountId)
+    body = (
+      <StatePanel
+        tone="empty"
+        title={`No verified record on ${networkConfig.name}`}
+        action={
+          <HStack justify="center" spacing={2} flexWrap="wrap">
+            {ambiguous && (
+              <Button as={NextLink} href={workspaceHref(accountId, { network: other })} variant="quiet">
+                Check {other === 'mainnet' ? 'Mainnet' : 'Testnet'}
+              </Button>
+            )}
+            <Button as={NextLink} href="/" variant="quiet">
+              Look up another account
+            </Button>
+          </HStack>
         }
-      )
-      .then((res) => {
-        console.log('Contract data response received')
-        const str_res = ascii_to_str(res.data.result.result)
-        const json_res = JSON.parse(str_res)
-        console.log('Contract data parsed successfully')
-        setData(json_res)
-        clearTimeout(timeoutId)
-      })
-      .catch((err) => {
-        console.error('Error fetching contract data:', err)
-        setLoading(false)
-        clearTimeout(timeoutId)
-      })
+      >
+        SourceScan has not verified {accountId} on {networkConfig.name}.
+      </StatePanel>
+    )
+  } else if (load.status === 'error' && netState === 'ready') {
+    body = (
+      <StatePanel tone="error" title="Couldn’t load the verification record" action={<Button variant="quiet" onClick={retry}>Try again</Button>}>
+        The {networkConfig.name} RPC request failed or the registry returned an error.
+      </StatePanel>
+    )
+  } else {
+    body = (
+      <>
+        {data ? (
+          <Verdict check={check} verifiedHash={data.code_hash} networkName={networkConfig.name} onRetry={() => setHashAttempt((n) => n + 1)} />
+        ) : (
+          <VerdictPending label="Loading the verification record…" />
+        )}
 
-    return () => clearTimeout(timeoutId)
-  }, [accountId, rpcUrl, networkConfig, networkDetected])
+        <Flex as="nav" aria-label="Contract sections" mt={6} borderBottom="1px solid" borderColor="rule" gap={1} overflowX="auto">
+          {TABS.map((t) => (
+            <Link
+              key={t.id}
+              as={NextLink}
+              href={hrefFor({ tab: t.id, file: requestedFile })}
+              replace
+              shallow
+              scroll={false}
+              aria-current={t.id === tab ? 'page' : undefined}
+              px={3}
+              py={2.5}
+              mb="-1px"
+              fontSize="sm"
+              fontWeight={t.id === tab ? 650 : 500}
+              color={t.id === tab ? 'ink' : 'muted'}
+              borderBottom="2px solid"
+              borderColor={t.id === tab ? 'accent' : 'transparent'}
+              whiteSpace="nowrap"
+              _hover={{ color: 'ink', textDecoration: 'none' }}
+            >
+              {t.label}
+            </Link>
+          ))}
+        </Flex>
 
-  useEffect(() => {
-    if (!data || !networkConfig || !accountId || !isValidNearAccount(accountId)) {
-      return
-    }
-
-    axios
-      .post(
-        rpcUrl,
-        {
-          jsonrpc: '2.0',
-          id: 'dontcare',
-          method: 'query',
-          params: {
-            request_type: 'view_code',
-            finality: 'final',
-            account_id: accountId,
-          },
-        },
-        {
-          headers: {
-            'X-Network': networkConfig.name.toLowerCase(),
-          },
-        }
-      )
-      .then((res) => {
-        // Add proper null checking to prevent "Cannot read properties of undefined" error
-        if (res.data && res.data.result && res.data.result.hash) {
-          setWasmMatch(res.data.result.hash === data.code_hash)
-        } else {
-          setWasmError('Could not retrieve code hash from the blockchain')
-          setWasmMatch(false)
-        }
-      })
-      .catch((err) => {
-        setWasmError(err.message)
-        setWasmMatch(false)
-      })
-
-    axios
-      .post(
-        rpcUrl,
-        {
-          jsonrpc: '2.0',
-          id: 'dontcare',
-          method: 'query',
-          params: {
-            request_type: 'call_function',
-            finality: 'final',
-            account_id: accountId,
-            method_name: 'contract_source_metadata',
-            args_base64: '',
-          },
-        },
-        {
-          headers: {
-            'X-Network': networkConfig.name.toLowerCase(),
-          },
-        }
-      )
-      .then((res) => {
-        const str_res = ascii_to_str(res.data.result.result)
-        const json_res = JSON.parse(str_res)
-        setMetadata(json_res)
-
-        console.log('Metadata loaded:', json_res)
-
-        try {
-          console.log(
-            'Source code snapshot:',
-            json_res.build_info?.source_code_snapshot || 'none'
-          )
-          const github = extractGitHubDetails(
-            json_res.build_info.source_code_snapshot
-          )
-          console.log('GitHub details extracted:', github)
-          github && setGithub(github)
-        } catch (e) {
-          console.error('Failed to extract GitHub details:', e)
-          setGithubAvailable(false)
-        }
-      })
-      .catch((err) => {
-        setTxError(err.message)
-      })
-      .finally(() => {
-        setLoadingLinks(false)
-      })
-  }, [data, accountId, rpcUrl, networkConfig])
-
-  // Check IPFS availability when data is loaded
-  useEffect(() => {
-    if (!data || !data.cid || ipfsChecked) return
-
-    // Try to fetch something from IPFS to check if it's available
-    axios
-      .get(`/api/proxy-ipfs`, {
-        params: {
-          endpoint: 'structure',
-          cid: data.cid,
-          path: '/',
-        },
-        headers: {
-          'X-Network': networkConfig.name.toLowerCase(),
-        },
-      })
-      .then(() => {
-        setIpfsAvailable(true)
-      })
-      .catch(() => {
-        setIpfsAvailable(false)
-      })
-      .finally(() => {
-        setIpfsChecked(true)
-      })
-  }, [data, ipfsChecked, networkConfig])
-
-  // Update GitHub availability when GitHub data is loaded or fails
-  useEffect(() => {
-    if (!loadingLinks) {
-      setGithubAvailable(!!github)
-    }
-  }, [github, loadingLinks])
-
-  // No need for toast messages anymore,
-  // since we're displaying error information inline
-
-  const [invalidAccountId, setInvalidAccountId] = useState(false)
-
-  // Step 1: Detect network from contract address and switch if necessary
-  useEffect(() => {
-    if (accountId) {
-      if (!isValidNearAccount(accountId)) {
-        console.log(`Invalid account ID: ${accountId}`)
-        setLoading(false)
-        setInvalidAccountId(true)
-        return
-      }
-
-      setInvalidAccountId(false)
-
-      const detectedNetwork = detectNetworkFromAddress(accountId)
-      if (detectedNetwork && detectedNetwork !== network) {
-        console.log(
-          `Contract page: Detected ${detectedNetwork} contract, switching networks from ${network}`
-        )
-        setNetwork(detectedNetwork)
-      } else {
-        // If no network switch needed, mark detection as complete
-        setNetworkDetected(true)
-      }
-    }
-  }, [accountId]) // Only depend on accountId to avoid re-running when network changes
+        <Box mt={4}>
+          {!data ? (
+            <Box border="1px solid" borderColor="rule" rounded="lg" bg="surface" h={{ base: '72vh', md: 'min(78vh, 880px)' }} minH="420px" aria-hidden />
+          ) : tab === 'source' ? (
+            <SourcePane network={network} data={data} rootPath={rootPath} requested={requestedFile} hrefFor={(file) => hrefFor({ file })} onSelect={(file) => replaceQuery({ file })} check={check} />
+          ) : tab === 'evidence' ? (
+            <EvidencePane accountId={accountId} network={network} data={data} check={check} github={github} entryFile={entryFile} entryFileUrl={entryFileUrl} />
+          ) : (
+            <BuildPane metadata={metadata} />
+          )}
+        </Box>
+      </>
+    )
+  }
 
   return (
     <>
-      <PageHead title={'SourceScan'} />
-      <PageRefresh>
-        <Stack align={'center'} justify={'center'} spacing={10} pb={100}>
-          {invalidAccountId ? (
-            <Stack spacing={4} align="center">
-              <Text color="red.500" fontSize="lg" fontWeight="medium">
-                Invalid contract address: {accountId}
-              </Text>
-              <Text color="gray.500">
-                Must be a valid NEAR account ID.
-              </Text>
-            </Stack>
-          ) : data ? (
-            <Stack
-              p={'4'}
-              borderColor={'gray.500'}
-              borderStyle={'dashed'}
-              borderWidth={'1px'}
-              rounded={'lg'}
-              textAlign={{ base: 'center', md: 'start' }}
-              align={{ base: 'center', md: 'start' }}
-              justify={{ base: 'center', md: 'start' }}
-              spacing={'10'}
-              w={{ base: '100%', md: '80%', lg: '60%' }}
-            >
-              <HStack spacing={'1'}>
-                <Heading fontSize={'lg'}>{accountId}</Heading>
-                <IconLink
-                  onClick={() =>
-                    window.open(
-                      `https://${
-                        process.env.NEXT_PUBLIC_NETWORK === 'mainnet'
-                          ? ''
-                          : 'testnet.'
-                      }nearblocks.io/address/${accountId}`,
-                      '_blank'
-                    )
-                  }
-                />
-              </HStack>
-              <Stack spacing={'4'}>
-                <DefaultHeading>Security Checks</DefaultHeading>
-                {wasmMatch === null ? (
-                  <Spinner size={'sm'} />
-                ) : wasmMatch ? (
-                  <HStack>
-                    <CheckIcon color="green.500" />
-                    <Text>Code Hash Matches</Text>
-                  </HStack>
-                ) : (
-                  <Stack>
-                    <HStack>
-                      <CloseIcon color="red.500" />
-                      <Text color="red.500" fontWeight="medium">
-                        Code Hash Mismatches
-                      </Text>
-                    </HStack>
-                    {wasmError && (
-                      <Text fontSize="sm" color="gray.500" pl={6}>
-                        {wasmError}
-                      </Text>
-                    )}
-                  </Stack>
-                )}
-              </Stack>
-              <Stack spacing={'4'}>
-                <DefaultHeading>Lang</DefaultHeading>
-                <Text fontSize={{ base: 'md', md: 'lg' }}>
-                  {data.lang === 'ts'
-                    ? 'TypeScript'
-                    : data.lang === 'rust'
-                    ? 'Rust'
-                    : 'unknown'}
-                </Text>
-              </Stack>
-              <Stack spacing={'4'}>
-                <DefaultHeading>Block</DefaultHeading>
-                <Text fontSize={{ base: 'md', md: 'lg' }}>
-                  {data.block_height}
-                </Text>
-              </Stack>
-              <Stack spacing={'4'}>
-                <DefaultHeading>Code Hash</DefaultHeading>
-                <Text fontSize={{ base: 'md', md: 'lg' }}>
-                  {data.code_hash}
-                </Text>
-              </Stack>
-              <Stack>
-                <DefaultHeading>IPFS</DefaultHeading>
-                <Flex display={{ base: 'none', md: 'flex' }}>
-                  <CidLink cid={data.cid} />
-                </Flex>
-                <Flex display={{ base: 'flex', md: 'none' }}>
-                  <CidLink cid={data.cid} isTruncated />
-                </Flex>
-              </Stack>
-              <Stack
-                spacing={'4'}
-                display={data?.github ? 'flex' : 'none'}
-                w={'full'}
-              >
-                <DefaultHeading>Github</DefaultHeading>
-                {data?.github ? <GithubLink github={data.github} /> : null}
-              </Stack>
-              {/* Source Code Section with Availability Checks */}
-              <Stack spacing={'4'}>
-                <DefaultHeading>Source Code</DefaultHeading>
-                <HStack>
-                  <Text>Github</Text>
-                  {loadingLinks ? (
-                    <Skeleton height="20px" width="150px" />
-                  ) : githubAvailable && github ? (
-                    <Link
-                      href={`https://github.com/${github.owner}/${
-                        github.repo
-                      }/blob/${github.sha}/${(() => {
-                        // Get normalized path
-                        let normalizedPath = ''
-                        if (metadata.build_info.contract_path) {
-                          normalizedPath =
-                            metadata.build_info.contract_path.toString()
-                          if (normalizedPath.endsWith('/')) {
-                            normalizedPath = normalizedPath.slice(0, -1)
-                          }
-                        }
+      <PageHead title={pageTitle} />
+      <Container maxW="1280px" px={{ base: 4, md: 6 }} pt={{ base: 4, md: 6 }}>
+        <Link as={NextLink} href={backHref} display="inline-flex" alignItems="center" gap={1.5} fontSize="sm" color="muted" _hover={{ color: 'ink' }}>
+          <Icon as={FiArrowLeft} aria-hidden />
+          Verified contracts
+        </Link>
 
-                        // For Rust contracts, ensure proper path structure
-                        if (data.lang === 'rust') {
-                          if (normalizedPath.endsWith('src')) {
-                            return `${normalizedPath}/lib.rs`
-                          } else if (normalizedPath.includes('/src/')) {
-                            const parts = normalizedPath.split('/src/')
-                            return `${parts[0]}/src/lib.rs`
-                          } else {
-                            return normalizedPath
-                              ? `${normalizedPath}/src/lib.rs`
-                              : 'src/lib.rs'
-                          }
-                        } else {
-                          // For non-Rust contracts, just use the normalized path
-                          return normalizedPath
-                        }
-                      })()}`}
-                      isExternal
-                    >
-                      <ExternalLinkIcon />
-                    </Link>
-                  ) : (
-                    <Text color="red.500" fontSize="sm">
-                      Unavailable
-                    </Text>
-                  )}
-                </HStack>
-                <HStack>
-                  <Text>Code Viewer (IPFS)</Text>
-                  {loadingLinks || !ipfsChecked ? (
-                    <Skeleton height="20px" width="150px" />
-                  ) : ipfsAvailable ? (
-                    <Link href={`/code/${accountId}`}>
-                      <ExternalLinkIcon />
-                    </Link>
-                  ) : (
-                    <Text color="red.500" fontSize="sm">
-                      Unavailable
-                    </Text>
-                  )}
-                </HStack>
-              </Stack>
-
-              <Heading fontSize={'lg'}>Contract Metadata</Heading>
-              {metadata ? (
-                <>
-                  <Stack spacing={'4'}>
-                    <DefaultHeading>Version</DefaultHeading>
-                    <Text fontSize={{ base: 'md', md: 'lg' }}>
-                      {metadata.version || 'N/A'}
-                    </Text>
-                  </Stack>
-                  <Stack spacing={'4'}>
-                    <DefaultHeading>Standards</DefaultHeading>
-                    <Text fontSize={{ base: 'md', md: 'lg' }}>
-                      {metadata.standards
-                        .map((s: any) => `${s.standard}:v${s.version}`)
-                        .join(', ')}
-                    </Text>
-                  </Stack>
-                  <Stack spacing={'4'}>
-                    <DefaultHeading>Git</DefaultHeading>
-                    {github ? <GithubLink github={github} /> : null}
-                  </Stack>
-                  <Stack spacing={'4'}>
-                    <DefaultHeading>Build Command</DefaultHeading>
-                    <Text fontSize={{ base: 'md', md: 'lg' }}>
-                      {metadata.build_info.build_command.join(' ')}
-                    </Text>
-                  </Stack>
-                  <Stack spacing={'4'}>
-                    <DefaultHeading>Build Environment</DefaultHeading>
-                    {metadata.build_info.build_environment ? (
-                      <Stack>
-                        {(() => {
-                          const { imageName, digest: _digest } =
-                            getImageNameAndDigest(
-                              metadata.build_info.build_environment
-                            )
-                          return (
-                            <>
-                              <HStack>
-                                <Text fontSize={{ base: 'md', md: 'lg' }}>
-                                  {imageName}
-                                </Text>{' '}
-                                <Link
-                                  href={getDockerHubLink(
-                                    metadata.build_info.build_environment
-                                  )}
-                                  isExternal
-                                  fontSize={{ base: 'md', md: 'lg' }}
-                                >
-                                  <ExternalLinkIcon />
-                                </Link>
-                              </HStack>
-                            </>
-                          )
-                        })()}
-                      </Stack>
-                    ) : (
-                      <Text fontSize={{ base: 'md', md: 'lg' }}>
-                        {metadata.build_info.build_environment}
-                      </Text>
-                    )}
-                  </Stack>
-                </>
-              ) : loadingLinks ? (
-                <HStack pt={4}>
-                  <Spinner size="sm" />
-                  <Text color="gray.500">Loading metadata...</Text>
-                </HStack>
-              ) : (
-                <Text color="red.500" pt={4}>
-                  No contract metadata found. The contract may not have
-                  published its metadata.
-                </Text>
+        <Flex mt={3} mb={4} gap={3} align={{ base: 'flex-start', md: 'flex-end' }} justify="space-between" direction={{ base: 'column', md: 'row' }}>
+          <Box minW={0}>
+            <HStack spacing={2} mb={1.5} minH="22px">
+              {netState !== 'unknown_network' && <NetworkPill />}
+              {data && (
+                <Badge textTransform="none" px={2} py={0.5} rounded="full" bg="subtle" color="muted" fontWeight="600">
+                  {langLabel(data.lang)}
+                </Badge>
               )}
-            </Stack>
-          ) : (
-            <Spinner size={'lg'} />
+            </HStack>
+            <HStack spacing={1} align="flex-start">
+              <Heading ref={headingRef} tabIndex={-1} as="h1" fontFamily="mono" fontSize={{ base: 'xl', md: '26px' }} fontWeight="600" letterSpacing="0" wordBreak="break-all" lineHeight="1.25" _focusVisible={{ outline: 'none' }}>
+                {accountId}
+              </Heading>
+              <Box pt={{ base: 0.5, md: 1 }}>
+                <CopyButton value={accountId} label="Copy account ID" />
+              </Box>
+            </HStack>
+          </Box>
+          {netState !== 'invalid' && netState !== 'unknown_network' && (
+            <Button as="a" href={nearblocks} target="_blank" rel="noopener noreferrer" size="sm" variant="quiet" rightIcon={<FiArrowUpRight aria-hidden />} flexShrink={0}>
+              View contract on NearBlocks
+              <VisuallyHidden> ({networkConfig.name}, opens in new tab)</VisuallyHidden>
+            </Button>
           )}
-        </Stack>
-      </PageRefresh>
+        </Flex>
+
+        {body}
+      </Container>
     </>
   )
 }

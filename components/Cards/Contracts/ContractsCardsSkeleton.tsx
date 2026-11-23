@@ -1,97 +1,15 @@
-import { bg, color } from '@/utils/theme'
-import { Box, HStack, Skeleton, Stack, useColorMode } from '@chakra-ui/react'
+import { Box, Skeleton, Stack } from '@chakra-ui/react'
 
-import TableHeading from './TableHeading'
-
-export default function ContractsCardsSkeleton({
-  count = 5,
-}: {
-  count?: number
-}) {
-  const { colorMode } = useColorMode()
-
+/** Placeholder for the compact list (< md). Hidden from assistive tech. */
+export default function ContractsCardsSkeleton({ count = 6 }: { count?: number }) {
   return (
-    <Stack
-      w={'95%'}
-      maxWidth="600px"
-      spacing={'10'}
-      display={{
-        base: 'flex',
-        md: 'none',
-      }}
-      minHeight="500px"
-    >
-      {Array.from({ length: count }).map((_, i) => (
-        <Box
-          key={`card-skeleton-${i}`}
-          borderColor={'gray.500'}
-          borderWidth={'1px'}
-          rounded={'lg'}
-          p={'4'}
-          display={{ base: 'flex', md: 'none' }}
-        >
-          <Stack spacing={'4'} width={'full'}>
-            <TableHeading label={'Contract'}>
-              <Skeleton
-                height="18px"
-                width="70%"
-                startColor={colorMode === 'dark' ? color.dark : color.light}
-                endColor={colorMode === 'dark' ? bg.dark : bg.light}
-              />
-            </TableHeading>
-            <TableHeading label={'Block Height'}>
-              <Skeleton
-                height="18px"
-                width="40%"
-                alignSelf="flex-end"
-                startColor={colorMode === 'dark' ? color.dark : color.light}
-                endColor={colorMode === 'dark' ? bg.dark : bg.light}
-              />
-            </TableHeading>
-            <TableHeading label={'Code Hash'}>
-              <Skeleton
-                height="18px"
-                width="55%"
-                alignSelf="flex-end"
-                startColor={colorMode === 'dark' ? color.dark : color.light}
-                endColor={colorMode === 'dark' ? bg.dark : bg.light}
-              />
-            </TableHeading>
-            <TableHeading label={'CID'}>
-              <Skeleton
-                height="18px"
-                width="70%"
-                startColor={colorMode === 'dark' ? color.dark : color.light}
-                endColor={colorMode === 'dark' ? bg.dark : bg.light}
-              />
-            </TableHeading>
-            <TableHeading label={'Approved'}>
-              <Skeleton
-                height="18px"
-                width="20px"
-                startColor={colorMode === 'dark' ? color.dark : color.light}
-                endColor={colorMode === 'dark' ? bg.dark : bg.light}
-              />
-            </TableHeading>
-            <HStack spacing={3} justifyContent="center">
-              <Skeleton
-                height="32px"
-                width="70px"
-                startColor={colorMode === 'dark' ? color.dark : color.light}
-                endColor={colorMode === 'dark' ? bg.dark : bg.light}
-                borderRadius="md"
-              />
-              <Skeleton
-                height="32px"
-                width="70px"
-                startColor={colorMode === 'dark' ? color.dark : color.light}
-                endColor={colorMode === 'dark' ? bg.dark : bg.light}
-                borderRadius="md"
-              />
-            </HStack>
-          </Stack>
-        </Box>
+    <Box aria-hidden display={{ base: 'block', md: 'none' }} border="1px solid" borderColor="rule" rounded="lg" bg="surface" overflow="hidden">
+      {Array.from({ length: Math.min(count, 8) }).map((_, i) => (
+        <Stack key={i} spacing={2.5} px={4} py={3.5} borderTop={i ? '1px solid' : undefined} borderColor="rule">
+          <Skeleton h="13px" w={`${55 + ((i * 17) % 35)}%`} />
+          <Skeleton h="16px" w="45%" rounded="full" />
+        </Stack>
       ))}
-    </Stack>
+    </Box>
   )
 }
