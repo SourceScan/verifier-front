@@ -5,7 +5,7 @@ const RPC_URLS: Record<NetworkType, string> = {
   testnet: 'https://near-testnet.drpc.org',
 }
 
-type RpcErrorKind = 'unknown_account' | 'no_contract_code' | 'execution_error' | 'unavailable'
+export type RpcErrorKind = 'unknown_account' | 'no_contract_code' | 'method_not_found' | 'execution_error' | 'unavailable'
 
 interface RpcFailure extends Error {
   kind: RpcErrorKind
@@ -13,7 +13,7 @@ interface RpcFailure extends Error {
 }
 
 interface QueryError {
-  cause?: { name?: unknown; info?: { block_height?: unknown } }
+  cause?: { name?: unknown; info?: { block_height?: unknown; vm_error?: unknown } }
   data?: unknown
   message?: unknown
 }
@@ -37,16 +37,40 @@ const readBlockHeight = (value: unknown): number | undefined =>
 export const isNearCodeHash = (value: unknown): value is string =>
   typeof value === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(value)
 
+/**
+ * The outcome of a failed contract call, from nearcore's FunctionCallError
+ * (its Debug form, as `vm_error` or after the legacy message prefix). Only
+ * the top-level variant is read, so text inside a panic message can never
+ * turn a failed call into a statement about the contract.
+ */
+const executionFailure = (vmError: string, detail: string): RpcFailure => {
+  if (/^MethodResolveError\(MethodNotFound\)$/.test(vmError)) return failure('method_not_found', detail)
+  if (/^CompilationError\(CodeDoesNotExist \{/.test(vmError)) return failure('no_contract_code', detail)
+  return failure('execution_error', detail)
+}
+
+const LEGACY_EXECUTION = /^(?:Function call returned an error: )?wasm execution failed with error: ([\s\S]*)$/
+
 const classify = (error: QueryError, legacyBlockHeight?: unknown): RpcFailure => {
-  const cause = String(error?.cause?.name ?? '')
-  const detail = String(error?.data ?? error?.message ?? '')
+  const cause = typeof error?.cause?.name === 'string' ? error.cause.name : ''
+  const detail = String(error?.data ?? error?.message ?? '').trim()
   const blockHeight = readBlockHeight(error?.cause?.info?.block_height ?? legacyBlockHeight)
-  if (cause === 'UNKNOWN_ACCOUNT' || (!cause && /account \S+ does not exist while viewing/i.test(detail)))
-    return failure('unknown_account', detail, blockHeight)
-  if (cause === 'NO_CONTRACT_CODE' || (!cause && /Contract code for contract ID \S+ has never been observed on the node/i.test(detail)))
+  // Structured errors: the cause name is the error type.
+  if (cause) {
+    if (cause === 'UNKNOWN_ACCOUNT') return failure('unknown_account', detail, blockHeight)
+    if (cause === 'NO_CONTRACT_CODE') return failure('no_contract_code', detail, blockHeight)
+    if (cause === 'CONTRACT_EXECUTION_ERROR') {
+      const vmError = error?.cause?.info?.vm_error
+      return executionFailure(typeof vmError === 'string' ? vmError.trim() : LEGACY_EXECUTION.exec(detail)?.[1] ?? '', detail)
+    }
+    return failure('unavailable', detail || 'RPC request failed')
+  }
+  // Legacy errors are only a message: match nearcore's whole message, never a fragment of it.
+  if (/^account \S+ does not exist while viewing$/.test(detail)) return failure('unknown_account', detail, blockHeight)
+  if (/^Contract code for contract ID #?\S+ has never been observed on the node$/.test(detail))
     return failure('no_contract_code', detail, blockHeight)
-  if (cause === 'CONTRACT_EXECUTION_ERROR' || /wasm execution failed|Function call returned an error/i.test(detail))
-    return failure('execution_error', detail)
+  const execution = LEGACY_EXECUTION.exec(detail)
+  if (execution) return executionFailure(execution[1], detail)
   return failure('unavailable', detail || 'RPC request failed')
 }
 

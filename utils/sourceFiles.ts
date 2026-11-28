@@ -18,31 +18,44 @@ export interface SourceFile {
   displayName?: string
 }
 
-const asList = (data: any): any[] => {
-  if (data?.structure)
-    return Array.isArray(data.structure) ? data.structure : [data.structure]
+/**
+ * Entries of a folder listing: `{ structure: [...] }` from the SourceScan API,
+ * or a bare array. Any other reply is unreadable, never an empty folder.
+ */
+function listingEntries(data: unknown): unknown[] {
+  const structure = (data as { structure?: unknown } | null)?.structure
+  if (Array.isArray(structure)) return structure
   if (Array.isArray(data)) return data
-  return data && typeof data === 'object' ? [data] : []
+  throw new Error('Unreadable folder listing')
 }
 
 const joinPath = (dir: string, name: string) =>
   [dir.replace(/^\/+|\/+$/g, ''), name].filter(Boolean).join('/')
 // One path segment: no separators and no "." / ".." that could leave the snapshot.
-const safeName = (name: unknown): name is string =>
-  typeof name === 'string' && name.length > 0 && name !== '.' && name !== '..' && !/[\\/]/.test(name)
+const safeName = (name: string) => name.length > 0 && name !== '.' && name !== '..' && !/[\\/]/.test(name)
+// A lone UTF-16 surrogate can't come from a real (UTF-8) listing and can't be put into a URL.
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/
+const unreadable = () => new Error('Unreadable folder listing')
 
 /**
  * The SourceScan API returns IPFS `ls` links ({ Name, Hash, Size, Type } with
- * Type 1 = directory, 2 = file). The older { name, path, type: 'file' | 'dir' }
- * shape is accepted too. Anything else is ignored.
+ * the UnixFS type 0-5: 1 = directory, 2 = file). The older
+ * { name, path, type: 'file' | 'dir' } shape is accepted too. Any entry that
+ * isn't one of these, in full, makes the reply unreadable: a folder that
+ * might hold `.git` is never reported as one that doesn't. Well-formed
+ * entries of other types (symlinks) or with unsafe names are skipped.
  */
 function toEntry(item: any, dir: string): SourceFile | null {
-  if (!item || typeof item !== 'object') return null
-  if (safeName(item.Name) && (item.Type === 1 || item.Type === 2))
+  if (!item || typeof item !== 'object') throw unreadable()
+  if ('Name' in item) {
+    if (typeof item.Name !== 'string' || LONE_SURROGATE.test(item.Name) || !Number.isInteger(item.Type) || item.Type < 0 || item.Type > 5) throw unreadable()
+    if (!safeName(item.Name) || (item.Type !== 1 && item.Type !== 2)) return null
     return { name: item.Name, path: joinPath(dir, item.Name), type: item.Type === 1 ? 'dir' : 'file' }
-  if (safeName(item.name) && (item.type === 'file' || item.type === 'dir'))
-    return { name: item.name, path: typeof item.path === 'string' ? item.path : joinPath(dir, item.name), type: item.type }
-  return null
+  }
+  if (typeof item.name !== 'string' || LONE_SURROGATE.test(item.name) || (item.type !== 'file' && item.type !== 'dir')) throw unreadable()
+  if (item.path !== undefined && (typeof item.path !== 'string' || LONE_SURROGATE.test(item.path))) throw unreadable()
+  if (!safeName(item.name)) return null
+  return { name: item.name, path: item.path ?? joinPath(dir, item.name), type: item.type }
 }
 
 const isSource = (item: any): item is SourceFile =>
@@ -51,38 +64,72 @@ const isSource = (item: any): item is SourceFile =>
   typeof item.path === 'string' &&
   (item.name.endsWith('.rs') || item.name.endsWith('.toml'))
 
-async function structure(network: NetworkType, cid: string, path: string): Promise<SourceFile[]> {
-  const res = await axios.get('/api/proxy-ipfs', {
-    params: { endpoint: 'structure', cid, path },
-    headers: { 'X-Network': network },
-  })
-  const dir = relativePath(cid, path)
-  return asList(res.data)
-    .map((item) => toEntry(item, dir))
-    .filter((entry): entry is SourceFile => entry !== null)
+const dirKey = (cid: string, path: string) => relativePath(cid, path).replace(/^\/+|\/+$/g, '')
+const listingKey = (network: NetworkType, cid: string, path: string) => `${network}:${cid}:${dirKey(cid, path)}`
+const listings = new Map<string, Promise<SourceFile[]>>()
+const answered = new WeakSet<Promise<SourceFile[]>>()
+
+/**
+ * One folder of the snapshot. Every caller shares one request per folder; a
+ * snapshot is content-addressed, so a listing that was read is kept, and a
+ * failed one is dropped so the next call asks again.
+ */
+function structure(network: NetworkType, cid: string, path: string): Promise<SourceFile[]> {
+  const dir = dirKey(cid, path)
+  const key = listingKey(network, cid, path)
+  const hit = listings.get(key)
+  if (hit) return hit
+  const request = axios
+    .get('/api/proxy-ipfs', {
+      params: { endpoint: 'structure', cid, path: dir || '/' },
+      headers: { 'X-Network': network },
+    })
+    .then((res) => listingEntries(res.data).map((item) => toEntry(item, dir)).filter((entry): entry is SourceFile => entry !== null))
+  listings.set(key, request)
+  request.then(
+    () => answered.add(request),
+    () => {
+      answered.add(request)
+      if (listings.get(key) === request) listings.delete(key)
+    }
+  )
+  return request
 }
 
-/** Throws when the snapshot root cannot be read; unreadable sub-folders are skipped. */
+/** Forgets a listing request that is still unanswered, so the next call sends a new one. */
+function expireUnanswered(network: NetworkType, cid: string, path: string) {
+  const key = listingKey(network, cid, path)
+  const pending = listings.get(key)
+  if (pending && !answered.has(pending)) listings.delete(key)
+}
+
+/**
+ * .rs/.toml files at `rootPath` and one folder below it (never inside `.git`).
+ * Throws when `rootPath` can't be read; `partial` is set when a sub-folder couldn't.
+ */
 export async function listSourceFiles(
   network: NetworkType,
   cid: string,
   rootPath: string
-): Promise<SourceFile[]> {
+): Promise<{ files: SourceFile[]; partial: boolean }> {
   const root = await structure(network, cid, rootPath)
+  let partial = false
   const nested = await Promise.all(
     root
-      .filter((item) => item.type === 'dir')
+      .filter((item) => item.type === 'dir' && item.name !== '.git')
       .map((dir) =>
         structure(network, cid, dir.path)
           .then((items) =>
             items.filter(isSource).map((file) => ({ ...file, displayName: `${dir.name}/${file.name}` }))
           )
-          .catch(() => [] as SourceFile[])
+          .catch(() => {
+            partial = true
+            return [] as SourceFile[]
+          })
       )
   )
-  return root.filter(isSource).concat(...nested)
+  return { files: root.filter(isSource).concat(...nested), partial }
 }
-
 
 export async function fetchSourceFile(
   network: NetworkType,
@@ -105,32 +152,25 @@ export async function fetchSourceFile(
 export const entryFile = (files: SourceFile[], lang?: string) =>
   (lang === 'rust' && files.find((f) => f.name === 'lib.rs')) || files[0]
 
-/** GitHub path of the entry file, derived from NEP-330 contract_path (as before). */
-export function githubEntryPath(contractPath: string | undefined, lang?: string) {
-  let path = (contractPath ?? '').toString()
-  if (path.endsWith('/')) path = path.slice(0, -1)
-  if (lang !== 'rust') return path
-  if (path.endsWith('src')) return `${path}/lib.rs`
-  if (path.includes('/src/')) return `${path.split('/src/')[0]}/src/lib.rs`
-  return path ? `${path}/src/lib.rs` : 'src/lib.rs'
-}
-
 /* ------------------------------------------------ workspace caches/helpers */
 
 const listCache = new Map<string, string[]>()
 const contentCache = new Map<string, string>()
 
-/** Snapshot-relative paths ("src/lib.rs"), cached per network + snapshot + root. */
+/**
+ * Snapshot-relative paths ("src/lib.rs") per network + snapshot + root. Only a
+ * complete listing is cached; a partial one is returned with `partial` set.
+ */
 export async function listSourcePaths(network: NetworkType, cid: string, rootPath: string) {
   const key = `${network}:${cid}:${rootPath}`
   const hit = listCache.get(key)
-  if (hit) return hit
-  const files = await listSourceFiles(network, cid, rootPath)
+  if (hit) return { paths: hit, partial: false }
+  const { files, partial } = await listSourceFiles(network, cid, rootPath)
   const paths = Array.from(new Set(files.map((f) => relativePath(cid, f.path).replace(/^\/+/, '')))).sort(
     (a, b) => Number(a.includes('/')) - Number(b.includes('/')) || a.localeCompare(b)
   )
-  listCache.set(key, paths)
-  return paths
+  if (!partial) listCache.set(key, paths)
+  return { paths, partial }
 }
 
 export const cachedSourcePaths = (network: NetworkType, cid: string, rootPath: string) =>
@@ -145,6 +185,56 @@ export async function fetchSource(network: NetworkType, cid: string, path: strin
   const text = await fetchSourceFile(network, cid, path)
   contentCache.set(key, text)
   return text
+}
+
+const checkoutCache = new Map<string, { head: string; config: string } | null>()
+
+/** A text file as the gateway returned it; any other reply is unreadable. */
+async function readSnapshotText(network: NetworkType, cid: string, path: string): Promise<string> {
+  const res = await axios.get('/api/proxy-ipfs', {
+    params: { endpoint: 'file', cid, path },
+    headers: { 'X-Network': network },
+  })
+  if (typeof res.data !== 'string') throw new Error(`Unreadable ${path}`)
+  return res.data
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`Timed out after ${ms} ms`)), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
+export const CHECKOUT_TIMEOUT_MS = 10_000
+
+/**
+ * `.git/HEAD` and `.git/config` of the git checkout stored at the snapshot
+ * root, or null when the root listing has no `.git` folder (older SourceScan
+ * snapshots don't keep one). Throws when the snapshot can't be read or
+ * doesn't answer within `timeoutMs`. Only an answer that was read is kept.
+ */
+export async function readSnapshotCheckout(network: NetworkType, cid: string, timeoutMs = CHECKOUT_TIMEOUT_MS) {
+  const key = `${network}:${cid}`
+  const hit = checkoutCache.get(key)
+  if (hit !== undefined) return hit
+  const read = async () => {
+    const root = await structure(network, cid, '/')
+    if (!root.some((entry) => entry.type === 'dir' && entry.name === '.git')) return null
+    const [head, config] = await Promise.all([readSnapshotText(network, cid, '.git/HEAD'), readSnapshotText(network, cid, '.git/config')])
+    return { head, config }
+  }
+  let checkout: { head: string; config: string } | null
+  try {
+    checkout = await withTimeout(read(), timeoutMs)
+  } catch (error) {
+    // A root listing that never answered must not be reused by the retry.
+    expireUnanswered(network, cid, '/')
+    throw error
+  }
+  checkoutCache.set(key, checkout)
+  return checkout
 }
 
 /** lib.rs for Rust contracts, otherwise the first path (same rule as before). */

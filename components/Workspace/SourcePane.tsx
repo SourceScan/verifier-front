@@ -4,6 +4,7 @@ import { verdictTone } from '@/components/Contracts/Verdict'
 import type { NetworkType } from '@/contexts/NetworkContext'
 import type { HashCheck } from '@/hooks/useCodeHashCheck'
 import type { ContractData } from '@/utils/contracts'
+import { FolderChoice, folderUnknown, isSnapshotFilePath, SourceRoot } from '@/utils/evidence'
 import { cachedSource, cachedSourcePaths, entryPath, fetchSource, listSourcePaths } from '@/utils/sourceFiles'
 import { HEADER_H } from '@/utils/theme'
 import { ipfsFileUrl } from '@/utils/urls'
@@ -11,7 +12,9 @@ import {
   Box,
   Button,
   Center,
+  Code,
   Flex,
+  HStack,
   Icon,
   Input,
   InputGroup,
@@ -40,14 +43,102 @@ const STRIPE: Record<HashCheck['status'], string> = {
   unavailable: 'The deployed code could not be checked.',
 }
 
-type Files = { key: string; status: 'loading' | 'error' | 'ready'; paths: string[] }
+type Files = { key: string; status: 'loading' | 'error' | 'ready'; paths: string[]; partial: boolean }
 type Content = { key: string; status: 'loading' | 'error' | 'ready'; text: string }
+
+/**
+ * Says which folder the tree shows and where that came from. The registry
+ * doesn't record which crate was built, so a folder taken from the current
+ * metadata is always labelled as such, even when it names the recorded commit.
+ */
+function FolderNotice(props: { root: SourceRoot; onChooseFolder: (_choice: FolderChoice) => void; onRetryMetadata: () => void }) {
+  const { root } = props
+  const hint = root.hint
+  const atLink = root.basis === 'link'
+  if (hint.status === 'none' && !atLink) return null
+  const warn = hint.status === 'unknown'
+  const linkFolder = (
+    <>
+      Showing <Code fontSize="13px">{root.rootPath}/</Code>, the folder of the linked file.
+    </>
+  )
+  const button = (label: string, onClick: () => void, mono = false) => (
+    <Button size="sm" variant="quiet" onClick={onClick} {...(mono ? { fontFamily: 'mono', maxW: 'full', h: 'auto', minH: 8, py: 1, whiteSpace: 'normal', wordBreak: 'break-all' } : {})}>
+      {label}
+    </Button>
+  )
+  return (
+    <Flex
+      role="status"
+      mb={3}
+      px={3}
+      py={2}
+      gap={2}
+      align="center"
+      justify="space-between"
+      wrap="wrap"
+      fontSize="sm"
+      border="1px solid"
+      rounded="lg"
+      borderColor={warn ? 'status.warnBorder' : 'rule'}
+      bg={warn ? 'status.warnBg' : 'surface'}
+      color={warn ? 'status.warn' : 'muted'}
+    >
+      <Text flex="1" minW="240px">
+        {hint.status === 'unknown' ? (
+          <>Couldn’t read the contract’s current metadata, so it’s unknown which folder of this snapshot holds the contract. {atLink ? linkFolder : 'Showing the snapshot root.'}</>
+        ) : root.basis === 'current_metadata' && hint.status === 'offered' ? (
+          <>
+            Showing <Code fontSize="13px">{hint.dir}/</Code>, the folder named in the contract’s current metadata. The verification record doesn’t name the crate
+            that was built, so this may not be the verified crate.
+          </>
+        ) : hint.status === 'offered' ? (
+          <>
+            {atLink && <>{linkFolder} </>}The contract’s current metadata names <Code fontSize="13px">{hint.dir}/</Code>. The verification record doesn’t name the
+            crate that was built.
+          </>
+        ) : (
+          linkFolder
+        )}
+      </Text>
+      <HStack spacing={1} flexWrap="wrap">
+        {hint.status === 'unknown' && button('Try again', props.onRetryMetadata)}
+        {hint.status === 'offered' && root.basis !== 'current_metadata' && button(`Open ${hint.dir}/`, () => props.onChooseFolder('metadata'), true)}
+        {(root.basis === 'current_metadata' || atLink) && button('Show snapshot root', () => props.onChooseFolder('root'))}
+      </HStack>
+    </Flex>
+  )
+}
 
 export default function SourcePane(props: {
   network: NetworkType
   data: ContractData
-  /** NEP-330 contract_path, '/' when absent; null while metadata is still loading. */
+  root: SourceRoot
+  onChooseFolder: (_choice: FolderChoice) => void
+  onRetryMetadata: () => void
+  /** `?file=` from the URL. */
+  requested: string | null
+  hrefFor: (_file: string) => string
+  onSelect: (_file: string) => void
+  check: HashCheck
+}) {
+  const { root, onChooseFolder, onRetryMetadata, ...tree } = props
+  return (
+    <>
+      <FolderNotice root={root} onChooseFolder={onChooseFolder} onRetryMetadata={onRetryMetadata} />
+      <SourceTree {...tree} rootPath={root.rootPath} folderUnknown={folderUnknown(root)} onRetryMetadata={onRetryMetadata} />
+    </>
+  )
+}
+
+function SourceTree(props: {
+  network: NetworkType
+  data: ContractData
+  /** Snapshot folder to list ('/' = root); null while it is still being decided. */
   rootPath: string | null
+  /** The metadata read failed, so which folder holds the contract is unknown. */
+  folderUnknown: boolean
+  onRetryMetadata: () => void
   /** `?file=` from the URL. */
   requested: string | null
   hrefFor: (_file: string) => string
@@ -65,18 +156,18 @@ export default function SourcePane(props: {
   const filesKey = `${network}:${data.cid}:${rootPath}`
   const [files, setFiles] = useState<Files>(() => {
     const hit = rootPath !== null ? cachedSourcePaths(network, data.cid, rootPath) : undefined
-    return { key: filesKey, status: hit ? 'ready' : 'loading', paths: hit ?? [] }
+    return { key: filesKey, status: hit ? 'ready' : 'loading', paths: hit ?? [], partial: false }
   })
 
   useEffect(() => {
     if (rootPath === null) return
     const hit = cachedSourcePaths(network, data.cid, rootPath)
-    if (hit) return setFiles({ key: filesKey, status: 'ready', paths: hit })
+    if (hit) return setFiles({ key: filesKey, status: 'ready', paths: hit, partial: false })
     let active = true
-    setFiles({ key: filesKey, status: 'loading', paths: [] })
+    setFiles({ key: filesKey, status: 'loading', paths: [], partial: false })
     listSourcePaths(network, data.cid, rootPath)
-      .then((paths) => active && setFiles({ key: filesKey, status: 'ready', paths }))
-      .catch(() => active && setFiles({ key: filesKey, status: 'error', paths: [] }))
+      .then(({ paths, partial }) => active && setFiles({ key: filesKey, status: 'ready', paths, partial }))
+      .catch(() => active && setFiles({ key: filesKey, status: 'error', paths: [], partial: false }))
     return () => {
       active = false
     }
@@ -84,8 +175,22 @@ export default function SourcePane(props: {
 
   const ready = files.key === filesKey && files.status === 'ready'
   const paths = useMemo(() => (ready ? files.paths : []), [ready, files.paths])
-  const missing = ready && !!props.requested && !paths.includes(props.requested)
-  const active = ready ? (props.requested && paths.includes(props.requested) ? props.requested : entryPath(paths, data.lang)) : props.requested
+  const partial = ready && files.partial
+  // A linked file opens even when the listing doesn't show it (it can sit
+  // deeper than one folder below the root). Only when reading it fails does
+  // the tree fall back to its entry file, without claiming the file is absent.
+  const requested = props.requested && isSnapshotFilePath(props.requested) ? props.requested : null
+  const listed = !!requested && paths.includes(requested)
+  const linkKey = requested ? `${data.cid}:${requested}` : null
+  const [linkFailed, setLinkFailed] = useState<string | null>(null)
+  const openLink = !!requested && (listed || linkFailed !== linkKey)
+  const active = ready ? (openLink ? requested : entryPath(paths, data.lang)) : props.requested
+  const unlistedLink = ready && openLink && !listed
+  const linkFallback = ready && !!props.requested && !openLink
+  const retryLink = () => {
+    setLinkFailed(null)
+    setContentAttempt((n) => n + 1)
+  }
 
   const contentKey = `${data.cid}:${active}`
   const [content, setContent] = useState<Content>(() => {
@@ -101,11 +206,15 @@ export default function SourcePane(props: {
     setContent({ key: contentKey, status: 'loading', text: '' })
     fetchSource(network, data.cid, active)
       .then((text) => active_ && setContent({ key: contentKey, status: 'ready', text }))
-      .catch(() => active_ && setContent({ key: contentKey, status: 'error', text: '' }))
+      .catch(() => {
+        if (!active_) return
+        if (active === requested && !listed) setLinkFailed(linkKey)
+        else setContent({ key: contentKey, status: 'error', text: '' })
+      })
     return () => {
       active_ = false
     }
-  }, [ready, active, network, data.cid, contentKey, contentAttempt])
+  }, [ready, active, network, data.cid, contentKey, contentAttempt, requested, listed, linkKey])
 
   // Only ever show the content that belongs to the file named in the header.
   const shown: Content = content.key === contentKey ? content : { key: contentKey, status: 'loading', text: '' }
@@ -185,10 +294,51 @@ export default function SourcePane(props: {
       </Center>
     )
 
-  if (ready && paths.length === 0)
+  // With the folder unknown, an empty listing only means the contract wasn't
+  // found there, not that the snapshot has no source.
+  if (ready && paths.length === 0 && !openLink && props.folderUnknown)
+    return (
+      <Center minH="240px" border="1px solid" borderColor="status.warnBorder" rounded="lg" bg="status.warnBg" p={6} role="status">
+        <Stack spacing={3} align="center" textAlign="center">
+          {linkFallback && <Text color="status.warn">Couldn’t open {props.requested} from this snapshot.</Text>}
+          <Text color="status.warn">The contract’s source folder is unknown until its current metadata can be read.</Text>
+          <Button
+            size="sm"
+            variant="quiet"
+            onClick={() => {
+              props.onRetryMetadata()
+              setFilesAttempt((n) => n + 1)
+              retryLink()
+            }}
+          >
+            Try again
+          </Button>
+        </Stack>
+      </Center>
+    )
+
+  if (ready && paths.length === 0 && !openLink)
     return (
       <Center minH="240px" border="1px solid" borderColor="rule" rounded="lg" bg="surface" p={6} role="status">
-        <Text color="muted">The snapshot has no .rs or .toml files at {rootPath === '/' ? 'its root' : rootPath} or one folder below it.</Text>
+        <Stack spacing={3} align="center" textAlign="center">
+          {linkFallback && <Text color="status.warn">Couldn’t open {props.requested} from this snapshot.</Text>}
+          <Text color="muted">
+            No .rs or .toml files at {rootPath === '/' ? 'the snapshot root' : `${rootPath}/`} or one folder below it
+            {partial ? ', but some of those folders couldn’t be read.' : '.'}
+          </Text>
+          {(partial || (linkFallback && requested)) && (
+            <Button
+              size="sm"
+              variant="quiet"
+              onClick={() => {
+                setFilesAttempt((n) => n + 1)
+                retryLink()
+              }}
+            >
+              Try again
+            </Button>
+          )}
+        </Stack>
       </Center>
     )
 
@@ -255,6 +405,14 @@ export default function SourcePane(props: {
             </Box>
           )}
         </Box>
+        {partial && (
+          <Flex px={3} py={1.5} gap={2} align="center" justify="space-between" fontSize="xs" color="status.warn" bg="status.warnBg" borderTop="1px solid" borderColor="status.warnBorder" role="status">
+            <Text>Some folders couldn’t be read.</Text>
+            <Button size="xs" variant="quiet" onClick={() => setFilesAttempt((n) => n + 1)}>
+              Try again
+            </Button>
+          </Flex>
+        )}
         <Text fontSize="xs" color="faint" px={3} py={2} borderTop="1px solid" borderColor="rule">
           {ready ? `Rust and TOML files: ${paths.length}` : 'Reading snapshot…'}
         </Text>
@@ -267,6 +425,7 @@ export default function SourcePane(props: {
           <Box display={{ base: 'block', md: 'none' }} flex="1" minW="0">
             <Select size="sm" aria-label="Source file" value={active ?? ''} onChange={(e) => choose(e.target.value)} isDisabled={!ready} fontFamily="mono" fontSize="13px" rounded="md" borderColor="ruleStrong" bg="surface">
               {!ready && <option value={active ?? ''}>{active ?? 'Reading snapshot…'}</option>}
+              {unlistedLink && active && <option value={active}>{active}</option>}
               {groups.map((g) =>
                 g.dir === '' ? (
                   g.files.map((p) => (
@@ -300,10 +459,22 @@ export default function SourcePane(props: {
         <Text px={3} py={1.5} fontSize="xs" fontWeight="600" color={tone.fg} bg={tone.bg} borderBottom="1px solid" borderColor={tone.border}>
           {STRIPE[props.check.status]}
         </Text>
-        {missing && (
-          <Text px={3} py={1.5} fontSize="xs" color="status.warn" bg="status.warnBg" borderBottom="1px solid" borderColor="status.warnBorder" role="status">
-            {props.requested} isn’t in this snapshot; showing {active}.
+        {unlistedLink && (
+          <Text px={3} py={1.5} fontSize="xs" color="muted" borderBottom="1px solid" borderColor="rule" role="status">
+            Opened from the link; {requested} isn’t among the files listed from {rootPath === '/' ? 'the snapshot root' : `${rootPath}/`}.
           </Text>
+        )}
+        {linkFallback && (
+          <Flex px={3} py={1.5} gap={2} align="center" justify="space-between" fontSize="xs" color="status.warn" bg="status.warnBg" borderBottom="1px solid" borderColor="status.warnBorder" role="status">
+            <Text>
+              Couldn’t open {props.requested} from this snapshot; showing {active}.
+            </Text>
+            {requested && (
+              <Button size="xs" variant="quiet" onClick={retryLink}>
+                Try again
+              </Button>
+            )}
+          </Flex>
         )}
         <Box flex="1" minH={0} position="relative" sx={{ '& .cm-theme, & .cm-editor': { height: '100%' } }}>
           {shown.status === 'ready' && active ? (
