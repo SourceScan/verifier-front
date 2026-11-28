@@ -142,8 +142,27 @@ test('only a missing method, code or account means "no metadata"; any failed rea
   response = () => Response.json({ error: { cause: { name: 'UNKNOWN_ACCOUNT' }, data: 'account example.near does not exist while viewing' } })
   assert.deepEqual(await load(), { status: 'absent', reason: 'no_account' })
 
-  // A panic inside contract_source_metadata is not "doesn't expose it".
-  response = legacy('wasm execution failed with error: HostError(GuestPanic { panic_msg: "panicked at src/lib.rs" })')
+  response = () =>
+    Response.json({ error: { name: 'HANDLER_ERROR', cause: { name: 'CONTRACT_EXECUTION_ERROR', info: { vm_error: 'MethodResolveError(MethodNotFound)' } } } })
+  assert.deepEqual(await load(), { status: 'absent', reason: 'no_method' })
+  response = () => Response.json({ error: { cause: { name: 'NO_CONTRACT_CODE', info: {} }, data: 'Contract code for contract ID #example.near has never been observed on the node' } })
+  assert.deepEqual(await load(), { status: 'absent', reason: 'no_code' })
+
+  // A panic inside contract_source_metadata is not "doesn't expose it", whatever its message says.
+  for (const panic of [
+    'HostError(GuestPanic { panic_msg: "panicked at src/lib.rs" })',
+    'HostError(GuestPanic { panic_msg: "Unexpected MethodNotFound from lookup" })',
+    'HostError(GuestPanic { panic_msg: "MethodResolveError(MethodNotFound)" })',
+    'HostError(GuestPanic { panic_msg: "CompilationError(CodeDoesNotExist { account_id: x })" })',
+    'MethodResolveError(MethodEmptyName)',
+  ]) {
+    response = legacy(`wasm execution failed with error: ${panic}`)
+    assert.deepEqual(await load(), { status: 'unknown' }, `legacy ${panic}`)
+    response = () => Response.json({ error: { cause: { name: 'CONTRACT_EXECUTION_ERROR', info: { vm_error: panic } }, data: `Function call returned an error: ${panic}` } })
+    assert.deepEqual(await load(), { status: 'unknown' }, `structured ${panic}`)
+  }
+  // A message that merely mentions MethodNotFound, outside an execution error, is a provider failure.
+  response = legacy('provider error: MethodResolveError(MethodNotFound)')
   assert.deepEqual(await load(), { status: 'unknown' })
   response = () => new Response(null, { status: 503 })
   assert.deepEqual(await load(), { status: 'unknown' })
