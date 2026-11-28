@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
 const { metadataLoadFromValue } = require('../utils/contractMetadata.ts')
-const { chooseSourceRoot, isSnapshotFilePath, linkedDir, liveRelation, liveSource, sameSource } = require('../utils/evidence.ts')
+const { chooseSourceRoot, folderUnknown, isSnapshotFilePath, linkedDir, liveRelation, liveSource, sameSource } = require('../utils/evidence.ts')
 const { githubFromGitCheckout, githubFromSnapshot, isGithubDto } = require('../utils/extractGithub.ts')
 
 const SHA = 'a2dd140892b68140bf7e70814604d3ba074d656c'
@@ -123,6 +123,26 @@ test('a ?file= link opens its own folder, without waiting for the metadata', () 
   assert.deepEqual(chooseSourceRoot({ status: 'loading' }, null, 'metadata'), { rootPath: null, basis: 'pending', hint: { status: 'none' } })
   // A path that could leave the snapshot is ignored.
   assert.equal(chooseSourceRoot({ status: 'absent' }, '../x/src/lib.rs', 'metadata').rootPath, '/')
+})
+
+test('a file the current folder lists never moves the tree', () => {
+  // No metadata: the root lists contracts/example.rs, so picking it (or reloading with it) keeps the root.
+  for (const file of ['Cargo.toml', 'contracts/example.rs'])
+    assert.deepEqual(chooseSourceRoot({ status: 'absent' }, file, 'metadata'), { rootPath: '/', basis: 'snapshot_root', hint: { status: 'none' } }, file)
+  // In the metadata folder, its files and one folder below stay there.
+  for (const file of ['contracts/defuse/Cargo.toml', 'contracts/defuse/tests/flow.rs', 'contracts/defuse/src/lib.rs'])
+    assert.equal(chooseSourceRoot(deployedLater, file, 'metadata').rootPath, 'contracts/defuse', file)
+  // After choosing the snapshot root, files listed there keep it.
+  assert.equal(chooseSourceRoot(deployedLater, 'contracts/Cargo.toml', 'root').rootPath, '/')
+  // Only a link the default folder doesn't list moves it.
+  assert.equal(chooseSourceRoot({ status: 'absent' }, 'contracts/ft/src/lib.rs', 'metadata').rootPath, 'contracts/ft')
+})
+
+test('an empty listing while the folder is unknown is not a statement about the snapshot', () => {
+  assert.equal(folderUnknown(chooseSourceRoot({ status: 'unknown' }, null, 'metadata')), true)
+  assert.equal(folderUnknown(chooseSourceRoot({ status: 'unknown' }, 'contracts/ft/src/lib.rs', 'metadata')), true)
+  assert.equal(folderUnknown(chooseSourceRoot({ status: 'absent' }, null, 'metadata')), false)
+  assert.equal(folderUnknown(chooseSourceRoot(deployedLater, null, 'root')), false)
 })
 
 test('linked files map to their crate folder; unsafe paths are not snapshot paths', () => {

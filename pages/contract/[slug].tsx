@@ -77,7 +77,14 @@ function Workspace({ accountId }: { accountId: string }) {
   // The reader's choice between the current metadata's folder and the snapshot root, per snapshot.
   const [folderChoice, setFolderChoice] = useState<{ cid: string; choice: FolderChoice } | null>(null)
   const choice: FolderChoice = data && folderChoice?.cid === data.cid ? folderChoice.choice : 'metadata'
-  const sourceRoot = chooseSourceRoot(live, requestedFile, choice)
+  // Only the ?file= link the workspace was opened with may choose the tree's
+  // folder. Picking a file in the tree updates ?file= too, but never moves it.
+  const [openedWith, setOpenedWith] = useState<{ file: string | null } | null>(null)
+  useEffect(() => {
+    if (router.isReady && !openedWith) setOpenedWith({ file: requestedFile })
+  }, [router.isReady, openedWith, requestedFile])
+  const deepLink = openedWith ? openedWith.file : router.isReady ? requestedFile : null
+  const sourceRoot = chooseSourceRoot(live, deepLink, choice)
 
   const linkNetwork = detectNetworkFromAddress(accountId) ? undefined : network
   const hrefFor = (opts: { tab?: Tab; file?: string | null }) => {
@@ -207,6 +214,7 @@ function Workspace({ accountId }: { accountId: string }) {
                   onChooseFolder={(next) => {
                     // A file picked in the other folder would no longer be listed.
                     setFolderChoice({ cid: data.cid, choice: next })
+                    setOpenedWith({ file: null })
                     replaceQuery({ file: null })
                   }}
                   onRetryMetadata={metadata.retry}

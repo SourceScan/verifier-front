@@ -101,14 +101,18 @@ const covers = (dir: string, file: string) => {
 }
 
 /**
- * Picks the snapshot folder the source tree opens at, in this order:
- * 1. the snapshot root, when the reader chose it and the link (if any) is listed there;
- * 2. the current metadata's folder, when the link is inside it;
- * 3. the linked file's own folder;
- * 4. the current metadata's folder (labelled as such), or else the snapshot root.
- * It depends only on the current metadata, the `?file=` link and the reader's
- * choice, never on the recorded-source read, so that read can't hold up
- * browsing. A link opens at once, without waiting for the metadata.
+ * Picks the snapshot folder the source tree opens at.
+ *
+ * The default is the reader's choice: the current metadata's folder (labelled
+ * as such) or the snapshot root. `link` is the `?file=` the workspace was
+ * opened with, and only a link may move the tree, and only when the default
+ * folder's listing wouldn't show it: then it opens the metadata folder, if the
+ * file is inside it, or else the file's own folder. So a file picked in the
+ * tree, which is listed by definition, never moves it, even after a reload.
+ *
+ * It depends only on the current metadata, the link and the reader's choice,
+ * never on the recorded-source read, so that read can't hold up browsing. A
+ * link opens at once, without waiting for the metadata.
  */
 export function chooseSourceRoot(live: LiveSource, requested: string | null, choice: FolderChoice): SourceRoot {
   const link = requested && isSnapshotFilePath(requested) ? requested : null
@@ -121,10 +125,14 @@ export function chooseSourceRoot(live: LiveSource, requested: string | null, cho
   const metaDir = hint.status === 'offered' ? hint.dir : null
   const at = (dir: string, basis: SourceRoot['basis']): SourceRoot =>
     dir ? { rootPath: dir, basis, hint } : { rootPath: '/', basis: 'snapshot_root', hint }
+  const preferred = choice === 'root' || metaDir === null ? '' : metaDir
+  const atPreferred = () => at(preferred, preferred === metaDir ? 'current_metadata' : 'snapshot_root')
 
-  if (!link && live.status === 'loading') return { rootPath: null, basis: 'pending', hint }
-  if (choice === 'root' && (!link || covers('', link))) return at('', 'snapshot_root')
-  if (link && metaDir !== null && link.startsWith(`${metaDir}/`)) return at(metaDir, 'current_metadata')
-  if (link) return at(linkedDir(link), 'link')
-  return metaDir !== null ? at(metaDir, 'current_metadata') : at('', 'snapshot_root')
+  if (live.status === 'loading') return link ? at(linkedDir(link), 'link') : { rootPath: null, basis: 'pending', hint }
+  if (!link || covers(preferred, link)) return atPreferred()
+  if (metaDir !== null && choice !== 'root' && link.startsWith(`${metaDir}/`)) return at(metaDir, 'current_metadata')
+  return at(linkedDir(link), 'link')
 }
+
+/** The folder is unknown (the metadata read failed), so an empty listing says nothing about the snapshot. */
+export const folderUnknown = (root: SourceRoot) => root.hint.status === 'unknown'

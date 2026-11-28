@@ -104,13 +104,20 @@ test('contract_path becomes a folder inside the snapshot only when it is a plain
     ['contracts//ft', null],
     ['contracts\\ft', null],
     ['contracts/\nft', null],
+    // A lone surrogate can't be put into a URL; a surrogate pair is ordinary text.
+    ['contracts/\ud800', null],
+    ['\udc00contracts', null],
+    ['contracts/\ud800x', null],
+    ['contracts/\ud83d\ude00', 'contracts/\ud83d\ude00'],
   ])
     assert.equal(contractDir(path), dir, JSON.stringify(path))
 
-  const metadata = parseSourceMetadata({ build_info: { contract_path: '../outside' } })
-  assert.equal(metadata.buildInfo.contractPath, '../outside')
-  assert.equal(metadata.buildInfo.contractDir, null)
-  assert.deepEqual(metadata.invalid, ['contract_path'])
+  for (const path of ['../outside', JSON.parse('"contracts/\\ud800"')]) {
+    const metadata = parseSourceMetadata({ build_info: { contract_path: path } })
+    assert.equal(metadata.buildInfo.contractPath, path)
+    assert.equal(metadata.buildInfo.contractDir, null)
+    assert.deepEqual(metadata.invalid, ['contract_path'])
+  }
 })
 
 test('the method result maps to ready, absent or invalid', () => {

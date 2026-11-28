@@ -58,8 +58,14 @@ function BuildImage(props: { value: string }) {
 
 const TITLE = 'Current build metadata (NEP-330)'
 
-const githubFolderUrl = (g: GithubDto, dir: string) =>
-  `${githubTreeUrl(g)}/${dir.split('/').map(encodeURIComponent).join('/')}`
+/** The folder on GitHub, or null when the path can't be put into a URL. */
+function githubFolderUrl(g: GithubDto, dir: string): string | null {
+  try {
+    return `${githubTreeUrl(g)}/${dir.split('/').map(encodeURIComponent).join('/')}`
+  } catch {
+    return null
+  }
+}
 
 const ABSENT: Record<Extract<MetadataLoad, { status: 'absent' }>['reason'], string> = {
   no_method: 'The deployed contract doesn’t expose contract_source_metadata, so no build metadata is published on-chain.',
@@ -112,6 +118,7 @@ export default function BuildPane(props: { metadata: MetadataLoad; onRetry: () =
   const env = build?.buildEnvironment?.trim() ?? ''
   const relation = liveRelation(props.recorded, props.live)
   const liveGithub = props.live.status === 'ready' ? props.live.github : null
+  const folderUrl = liveGithub && build?.contractDir ? githubFolderUrl(liveGithub, build.contractDir) : null
 
   return (
     <Panel title={TITLE}>
@@ -157,9 +164,9 @@ export default function BuildPane(props: { metadata: MetadataLoad; onRetry: () =
                 <Stack spacing={1}>
                   <Mono>{build.contractPath}</Mono>
                   {bad('contract_path') && <Flagged>Not a relative folder inside the source, so it isn’t used to open the source.</Flagged>}
-                  {liveGithub && build.contractDir && (
+                  {folderUrl && (
                     <Text as="div" fontSize="13px">
-                      <ExternalTextLink href={githubFolderUrl(liveGithub, build.contractDir)} srSuffix="on GitHub, at the commit in the current metadata">
+                      <ExternalTextLink href={folderUrl} srSuffix="on GitHub, at the commit in the current metadata">
                         This folder on GitHub at the current metadata’s commit
                       </ExternalTextLink>
                     </Text>

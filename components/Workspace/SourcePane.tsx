@@ -4,7 +4,7 @@ import { verdictTone } from '@/components/Contracts/Verdict'
 import type { NetworkType } from '@/contexts/NetworkContext'
 import type { HashCheck } from '@/hooks/useCodeHashCheck'
 import type { ContractData } from '@/utils/contracts'
-import { FolderChoice, isSnapshotFilePath, SourceRoot } from '@/utils/evidence'
+import { FolderChoice, folderUnknown, isSnapshotFilePath, SourceRoot } from '@/utils/evidence'
 import { cachedSource, cachedSourcePaths, entryPath, fetchSource, listSourcePaths } from '@/utils/sourceFiles'
 import { HEADER_H } from '@/utils/theme'
 import { ipfsFileUrl } from '@/utils/urls'
@@ -14,6 +14,7 @@ import {
   Center,
   Code,
   Flex,
+  HStack,
   Icon,
   Input,
   InputGroup,
@@ -53,9 +54,19 @@ type Content = { key: string; status: 'loading' | 'error' | 'ready'; text: strin
 function FolderNotice(props: { root: SourceRoot; onChooseFolder: (_choice: FolderChoice) => void; onRetryMetadata: () => void }) {
   const { root } = props
   const hint = root.hint
-  if (hint.status === 'none') return null
+  const atLink = root.basis === 'link'
+  if (hint.status === 'none' && !atLink) return null
   const warn = hint.status === 'unknown'
-  const where = root.basis === 'link' ? <>Showing <Code fontSize="13px">{root.rootPath}/</Code>, the folder of the linked file.</> : <>Showing the snapshot root.</>
+  const linkFolder = (
+    <>
+      Showing <Code fontSize="13px">{root.rootPath}/</Code>, the folder of the linked file.
+    </>
+  )
+  const button = (label: string, onClick: () => void, mono = false) => (
+    <Button size="sm" variant="quiet" onClick={onClick} {...(mono ? { fontFamily: 'mono', maxW: 'full', h: 'auto', minH: 8, py: 1, whiteSpace: 'normal', wordBreak: 'break-all' } : {})}>
+      {label}
+    </Button>
+  )
   return (
     <Flex
       role="status"
@@ -75,31 +86,26 @@ function FolderNotice(props: { root: SourceRoot; onChooseFolder: (_choice: Folde
     >
       <Text flex="1" minW="240px">
         {hint.status === 'unknown' ? (
-          <>Couldn’t read the contract’s current metadata, so it’s unknown which folder of this snapshot holds the contract. {where}</>
-        ) : root.basis === 'current_metadata' ? (
+          <>Couldn’t read the contract’s current metadata, so it’s unknown which folder of this snapshot holds the contract. {atLink ? linkFolder : 'Showing the snapshot root.'}</>
+        ) : root.basis === 'current_metadata' && hint.status === 'offered' ? (
           <>
             Showing <Code fontSize="13px">{hint.dir}/</Code>, the folder named in the contract’s current metadata. The verification record doesn’t name the crate
             that was built, so this may not be the verified crate.
           </>
-        ) : (
+        ) : hint.status === 'offered' ? (
           <>
-            The contract’s current metadata names <Code fontSize="13px">{hint.dir}/</Code>. The verification record doesn’t name the crate that was built.
+            {atLink && <>{linkFolder} </>}The contract’s current metadata names <Code fontSize="13px">{hint.dir}/</Code>. The verification record doesn’t name the
+            crate that was built.
           </>
+        ) : (
+          linkFolder
         )}
       </Text>
-      {hint.status === 'unknown' ? (
-        <Button size="sm" variant="quiet" onClick={props.onRetryMetadata}>
-          Try again
-        </Button>
-      ) : root.basis === 'current_metadata' ? (
-        <Button size="sm" variant="quiet" onClick={() => props.onChooseFolder('root')}>
-          Show snapshot root
-        </Button>
-      ) : (
-        <Button size="sm" variant="quiet" onClick={() => props.onChooseFolder('metadata')} fontFamily="mono" maxW="full" h="auto" minH={8} py={1} whiteSpace="normal" wordBreak="break-all">
-          Open {hint.dir}/
-        </Button>
-      )}
+      <HStack spacing={1} flexWrap="wrap">
+        {hint.status === 'unknown' && button('Try again', props.onRetryMetadata)}
+        {hint.status === 'offered' && root.basis !== 'current_metadata' && button(`Open ${hint.dir}/`, () => props.onChooseFolder('metadata'), true)}
+        {(root.basis === 'current_metadata' || atLink) && button('Show snapshot root', () => props.onChooseFolder('root'))}
+      </HStack>
     </Flex>
   )
 }
@@ -120,7 +126,7 @@ export default function SourcePane(props: {
   return (
     <>
       <FolderNotice root={root} onChooseFolder={onChooseFolder} onRetryMetadata={onRetryMetadata} />
-      <SourceTree {...tree} rootPath={root.rootPath} />
+      <SourceTree {...tree} rootPath={root.rootPath} folderUnknown={folderUnknown(root)} onRetryMetadata={onRetryMetadata} />
     </>
   )
 }
@@ -130,6 +136,9 @@ function SourceTree(props: {
   data: ContractData
   /** Snapshot folder to list ('/' = root); null while it is still being decided. */
   rootPath: string | null
+  /** The metadata read failed, so which folder holds the contract is unknown. */
+  folderUnknown: boolean
+  onRetryMetadata: () => void
   /** `?file=` from the URL. */
   requested: string | null
   hrefFor: (_file: string) => string
@@ -279,6 +288,29 @@ function SourceTree(props: {
           <Text fontWeight="600">Couldn’t open the IPFS snapshot</Text>
           <Text fontSize="sm" color="muted">The verified source for this record could not be read from IPFS right now.</Text>
           <Button size="sm" variant="quiet" onClick={() => setFilesAttempt((n) => n + 1)}>
+            Try again
+          </Button>
+        </Stack>
+      </Center>
+    )
+
+  // With the folder unknown, an empty listing only means the contract wasn't
+  // found there, not that the snapshot has no source.
+  if (ready && paths.length === 0 && !openLink && props.folderUnknown)
+    return (
+      <Center minH="240px" border="1px solid" borderColor="status.warnBorder" rounded="lg" bg="status.warnBg" p={6} role="status">
+        <Stack spacing={3} align="center" textAlign="center">
+          {linkFallback && <Text color="status.warn">Couldn’t open {props.requested} from this snapshot.</Text>}
+          <Text color="status.warn">The contract’s source folder is unknown until its current metadata can be read.</Text>
+          <Button
+            size="sm"
+            variant="quiet"
+            onClick={() => {
+              props.onRetryMetadata()
+              setFilesAttempt((n) => n + 1)
+              retryLink()
+            }}
+          >
             Try again
           </Button>
         </Stack>

@@ -50,16 +50,19 @@ export interface SourceMetadata {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
+// A lone UTF-16 surrogate isn't text: it can't be put into a URL (encodeURIComponent throws).
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/
+
 /**
  * A relative folder of plain path segments ('' for the root). Leading "./",
- * leading and trailing slashes are tolerated; "..", "." segments, backslashes
- * and control characters are not.
+ * leading and trailing slashes are tolerated; "..", "." segments, backslashes,
+ * control characters and lone surrogates are not.
  */
 export function contractDir(path: string): string | null {
   const trimmed = path.trim().replace(/^(\.\/)+/, '').replace(/^\/+|\/+$/g, '')
   if (trimmed === '' || trimmed === '.') return ''
   // eslint-disable-next-line no-control-regex
-  if (/[\\\u0000-\u001f\u007f]/.test(trimmed)) return null
+  if (/[\\\u0000-\u001f\u007f]/.test(trimmed) || LONE_SURROGATE.test(trimmed)) return null
   const segments = trimmed.split('/')
   return segments.every((s) => s !== '' && s !== '.' && s !== '..') ? segments.join('/') : null
 }
