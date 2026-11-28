@@ -32,23 +32,30 @@ function listingEntries(data: unknown): unknown[] {
 const joinPath = (dir: string, name: string) =>
   [dir.replace(/^\/+|\/+$/g, ''), name].filter(Boolean).join('/')
 // One path segment: no separators and no "." / ".." that could leave the snapshot.
-const safeName = (name: unknown): name is string =>
-  typeof name === 'string' && name.length > 0 && name !== '.' && name !== '..' && !/[\\/]/.test(name)
+const safeName = (name: string) => name.length > 0 && name !== '.' && name !== '..' && !/[\\/]/.test(name)
+// A lone UTF-16 surrogate can't come from a real (UTF-8) listing and can't be put into a URL.
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/
+const unreadable = () => new Error('Unreadable folder listing')
 
 /**
  * The SourceScan API returns IPFS `ls` links ({ Name, Hash, Size, Type } with
- * Type 1 = directory, 2 = file). The older { name, path, type: 'file' | 'dir' }
- * shape is accepted too. Other entry types (symlinks, unsafe names) are skipped.
+ * the UnixFS type 0-5: 1 = directory, 2 = file). The older
+ * { name, path, type: 'file' | 'dir' } shape is accepted too. Any entry that
+ * isn't one of these, in full, makes the reply unreadable: a folder that
+ * might hold `.git` is never reported as one that doesn't. Well-formed
+ * entries of other types (symlinks) or with unsafe names are skipped.
  */
 function toEntry(item: any, dir: string): SourceFile | null {
-  // An entry that isn't a named link at all means the reply isn't a listing.
-  if (!item || typeof item !== 'object' || (typeof item.Name !== 'string' && typeof item.name !== 'string'))
-    throw new Error('Unreadable folder listing')
-  if (safeName(item.Name) && (item.Type === 1 || item.Type === 2))
+  if (!item || typeof item !== 'object') throw unreadable()
+  if ('Name' in item) {
+    if (typeof item.Name !== 'string' || LONE_SURROGATE.test(item.Name) || !Number.isInteger(item.Type) || item.Type < 0 || item.Type > 5) throw unreadable()
+    if (!safeName(item.Name) || (item.Type !== 1 && item.Type !== 2)) return null
     return { name: item.Name, path: joinPath(dir, item.Name), type: item.Type === 1 ? 'dir' : 'file' }
-  if (safeName(item.name) && (item.type === 'file' || item.type === 'dir'))
-    return { name: item.name, path: typeof item.path === 'string' ? item.path : joinPath(dir, item.name), type: item.type }
-  return null
+  }
+  if (typeof item.name !== 'string' || LONE_SURROGATE.test(item.name) || (item.type !== 'file' && item.type !== 'dir')) throw unreadable()
+  if (item.path !== undefined && (typeof item.path !== 'string' || LONE_SURROGATE.test(item.path))) throw unreadable()
+  if (!safeName(item.name)) return null
+  return { name: item.name, path: item.path ?? joinPath(dir, item.name), type: item.type }
 }
 
 const isSource = (item: any): item is SourceFile =>
@@ -58,7 +65,9 @@ const isSource = (item: any): item is SourceFile =>
   (item.name.endsWith('.rs') || item.name.endsWith('.toml'))
 
 const dirKey = (cid: string, path: string) => relativePath(cid, path).replace(/^\/+|\/+$/g, '')
+const listingKey = (network: NetworkType, cid: string, path: string) => `${network}:${cid}:${dirKey(cid, path)}`
 const listings = new Map<string, Promise<SourceFile[]>>()
+const answered = new WeakSet<Promise<SourceFile[]>>()
 
 /**
  * One folder of the snapshot. Every caller shares one request per folder; a
@@ -67,7 +76,7 @@ const listings = new Map<string, Promise<SourceFile[]>>()
  */
 function structure(network: NetworkType, cid: string, path: string): Promise<SourceFile[]> {
   const dir = dirKey(cid, path)
-  const key = `${network}:${cid}:${dir}`
+  const key = listingKey(network, cid, path)
   const hit = listings.get(key)
   if (hit) return hit
   const request = axios
@@ -77,8 +86,21 @@ function structure(network: NetworkType, cid: string, path: string): Promise<Sou
     })
     .then((res) => listingEntries(res.data).map((item) => toEntry(item, dir)).filter((entry): entry is SourceFile => entry !== null))
   listings.set(key, request)
-  request.catch(() => listings.delete(key))
+  request.then(
+    () => answered.add(request),
+    () => {
+      answered.add(request)
+      if (listings.get(key) === request) listings.delete(key)
+    }
+  )
   return request
+}
+
+/** Forgets a listing request that is still unanswered, so the next call sends a new one. */
+function expireUnanswered(network: NetworkType, cid: string, path: string) {
+  const key = listingKey(network, cid, path)
+  const pending = listings.get(key)
+  if (pending && !answered.has(pending)) listings.delete(key)
 }
 
 /**
@@ -129,16 +151,6 @@ export async function fetchSourceFile(
 /** lib.rs for Rust contracts, otherwise the first file (as before). */
 export const entryFile = (files: SourceFile[], lang?: string) =>
   (lang === 'rust' && files.find((f) => f.name === 'lib.rs')) || files[0]
-
-/** GitHub path of the entry file, derived from NEP-330 contract_path (as before). */
-export function githubEntryPath(contractPath: string | undefined, lang?: string) {
-  let path = (contractPath ?? '').toString()
-  if (path.endsWith('/')) path = path.slice(0, -1)
-  if (lang !== 'rust') return path
-  if (path.endsWith('src')) return `${path}/lib.rs`
-  if (path.includes('/src/')) return `${path.split('/src/')[0]}/src/lib.rs`
-  return path ? `${path}/src/lib.rs` : 'src/lib.rs'
-}
 
 /* ------------------------------------------------ workspace caches/helpers */
 
@@ -213,7 +225,14 @@ export async function readSnapshotCheckout(network: NetworkType, cid: string, ti
     const [head, config] = await Promise.all([readSnapshotText(network, cid, '.git/HEAD'), readSnapshotText(network, cid, '.git/config')])
     return { head, config }
   }
-  const checkout = await withTimeout(read(), timeoutMs)
+  let checkout: { head: string; config: string } | null
+  try {
+    checkout = await withTimeout(read(), timeoutMs)
+  } catch (error) {
+    // A root listing that never answered must not be reused by the retry.
+    expireUnanswered(network, cid, '/')
+    throw error
+  }
   checkoutCache.set(key, checkout)
   return checkout
 }

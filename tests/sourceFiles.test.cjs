@@ -68,6 +68,58 @@ test('a checkout read that never answers times out instead of waiting', async (t
   assert.equal(sf.CHECKOUT_TIMEOUT_MS, 10000)
 })
 
+test('a root listing that never answered is not reused when the checkout read is retried', async (t) => {
+  let stall = true
+  const calls = proxy(t, {
+    'structure:/': () => (stall ? new Promise(() => {}) : { structure: [dir('.git')] }),
+    'file:.git/HEAD': `${SHA}\n`,
+    'file:.git/config': CONFIG,
+  })
+  await assert.rejects(sf.readSnapshotCheckout('mainnet', 'cid-stalled-root', 50), /Timed out after 50 ms/)
+  stall = false
+  assert.deepEqual(await sf.readSnapshotCheckout('mainnet', 'cid-stalled-root', 50), { head: `${SHA}\n`, config: CONFIG })
+  assert.equal(calls.filter((c) => c === 'structure:/').length, 2)
+})
+
+test('a root listing that did answer is kept when only a .git file timed out', async (t) => {
+  let stall = true
+  const calls = proxy(t, {
+    'structure:/': { structure: [dir('.git')] },
+    'file:.git/HEAD': () => (stall ? new Promise(() => {}) : `${SHA}\n`),
+    'file:.git/config': CONFIG,
+  })
+  await assert.rejects(sf.readSnapshotCheckout('mainnet', 'cid-stalled-head', 50), /Timed out/)
+  stall = false
+  assert.equal((await sf.readSnapshotCheckout('mainnet', 'cid-stalled-head', 50)).head, `${SHA}\n`)
+  assert.equal(calls.filter((c) => c === 'structure:/').length, 1)
+})
+
+test('a listing with any malformed entry is unreadable, never a cached absence', async (t) => {
+  let entries
+  proxy(t, { 'structure:/': () => ({ structure: entries }), 'file:.git/HEAD': `${SHA}\n`, 'file:.git/config': CONFIG })
+  for (const bad of [
+    [{ Name: '.git', Hash: 'unused' }],
+    [{ Name: '.git', Hash: 'h', Type: '1' }],
+    [{ Name: '.git', Hash: 'h', Type: 9 }],
+    [{ Name: '.git', Hash: 'h', Type: 1.5 }],
+    [{ Name: 7, Type: 1 }],
+    [{ Name: '\ud800', Type: 2 }],
+    [file('Cargo.toml'), { name: '.git' }],
+    [{ name: '.git', type: 'dir', path: 5 }],
+    [{ Hash: 'h', Type: 1 }],
+  ]) {
+    entries = bad
+    await assert.rejects(sf.readSnapshotCheckout('mainnet', 'cid-bad-entry'), /Unreadable folder listing/, JSON.stringify(bad))
+  }
+  // Well-formed entries of other types, or with names that can't be shown, are skipped.
+  entries = [{ Name: 'link', Hash: 'h', Size: 0, Type: 4 }, { Name: '..', Hash: 'h', Size: 0, Type: 1 }, file('Cargo.toml')]
+  assert.equal(await sf.readSnapshotCheckout('mainnet', 'cid-bad-entry'), null)
+})
+
+test('githubEntryPath is gone', () => {
+  assert.equal(sf.githubEntryPath, undefined)
+})
+
 test('the root listing is shared, and .git itself is never listed', async (t) => {
   const calls = proxy(t, {
     'structure:/': { structure: [dir('.git'), dir('src'), dir('.github'), file('Cargo.toml')] },
