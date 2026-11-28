@@ -2,9 +2,11 @@ import CopyButton from '@/components/Common/CopyButton'
 import ExternalTextLink from '@/components/Common/ExternalTextLink'
 import GithubLink from '@/components/Common/GithubLink'
 import { Field, Fields, Panel } from '@/components/Common/Panel'
+import type { GithubDto } from '@/Interfaces/github/github.dto'
 import { parseImageRef, registryPage } from '@/utils/buildImage'
 import type { MetadataField, MetadataLoad } from '@/utils/contractMetadata'
 import { liveRelation, LiveSource, RecordedSource } from '@/utils/evidence'
+import { githubTreeUrl } from '@/utils/urls'
 import { Badge, Box, Button, Code, Flex, HStack, Spinner, Stack, Text } from '@chakra-ui/react'
 import { ReactNode } from 'react'
 
@@ -55,6 +57,9 @@ function BuildImage(props: { value: string }) {
 }
 
 const TITLE = 'Current build metadata (NEP-330)'
+
+const githubFolderUrl = (g: GithubDto, dir: string) =>
+  `${githubTreeUrl(g)}/${dir.split('/').map(encodeURIComponent).join('/')}`
 
 const ABSENT: Record<Extract<MetadataLoad, { status: 'absent' }>['reason'], string> = {
   no_method: 'The deployed contract doesn’t expose contract_source_metadata, so no build metadata is published on-chain.',
@@ -152,6 +157,13 @@ export default function BuildPane(props: { metadata: MetadataLoad; onRetry: () =
                 <Stack spacing={1}>
                   <Mono>{build.contractPath}</Mono>
                   {bad('contract_path') && <Flagged>Not a relative folder inside the source, so it isn’t used to open the source.</Flagged>}
+                  {liveGithub && build.contractDir && (
+                    <Text as="div" fontSize="13px">
+                      <ExternalTextLink href={githubFolderUrl(liveGithub, build.contractDir)} srSuffix="on GitHub, at the commit in the current metadata">
+                        This folder on GitHub at the current metadata’s commit
+                      </ExternalTextLink>
+                    </Text>
+                  )}
                 </Stack>
               ) : bad('contract_path') ? (
                 wrongType

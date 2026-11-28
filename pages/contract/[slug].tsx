@@ -14,10 +14,9 @@ import { useContractRecord, useSourceMetadata } from '@/hooks/useContract'
 import { useRecordedSource } from '@/hooks/useRecordedSource'
 import { langLabel } from '@/utils/contracts'
 import { detectNetworkFromAddress } from '@/utils/detectNetwork'
-import { chooseSourceRoot, liveSource } from '@/utils/evidence'
+import { chooseSourceRoot, FolderChoice, liveSource } from '@/utils/evidence'
 import { githubFromSnapshot } from '@/utils/extractGithub'
 import { hasClientNavigated, registryUrl } from '@/utils/navigation'
-import { githubEntryPath } from '@/utils/sourceFiles'
 import { explorerContractUrl, workspaceHref } from '@/utils/urls'
 import { Badge, Box, Button, Container, Flex, Heading, HStack, Icon, Link, VisuallyHidden } from '@chakra-ui/react'
 import NextLink from 'next/link'
@@ -53,7 +52,8 @@ function Workspace({ accountId }: { accountId: string }) {
   const { load, retry } = useContractRecord(accountId, netState === 'ready')
   const data = netState === 'ready' && load.status === 'ready' ? load.data : null
   const metadata = useSourceMetadata(accountId, !!data)
-  const recorded = useRecordedSource(network, data)
+  // The recorded source is read only for the tabs that show it.
+  const recorded = useRecordedSource(network, data, tab !== 'source')
   const { check, retry: retryHashCheck } = useCodeHashCheck(network, accountId, data?.code_hash)
 
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -67,22 +67,17 @@ function Workspace({ accountId }: { accountId: string }) {
   const [backHref, setBackHref] = useState('/')
   useEffect(() => setBackHref(registryUrl()), [])
 
-  // The current metadata describes the code deployed now; it stands in for the
-  // recorded snapshot only where it names the same repository and commit.
+  // The current metadata describes the code deployed now. It is never presented
+  // as the recorded source: its folder opens the tree only under its own label.
   const live = useMemo(() => {
     const load = metadata.load
     const snapshot = load.status === 'ready' ? load.metadata.buildInfo?.sourceCodeSnapshot : null
     return liveSource(load, githubFromSnapshot(snapshot))
   }, [metadata.load])
-  // The reader's choice to open the folder the current metadata names, per snapshot.
-  const [hintOpenFor, setHintOpenFor] = useState<string | null>(null)
-  const sourceRoot = chooseSourceRoot(recorded.source, live, requestedFile, !!data && hintOpenFor === data.cid)
-  const verifiedGithub = recorded.source.status === 'known' ? recorded.source.github : null
-  const entryFile = verifiedGithub && sourceRoot.verifiedDir !== null ? githubEntryPath(sourceRoot.verifiedDir, data?.lang) : ''
-  const entryFileUrl =
-    verifiedGithub && sourceRoot.verifiedDir !== null
-      ? `https://github.com/${verifiedGithub.owner}/${verifiedGithub.repo}/blob/${verifiedGithub.sha}/${entryFile}`
-      : null
+  // The reader's choice between the current metadata's folder and the snapshot root, per snapshot.
+  const [folderChoice, setFolderChoice] = useState<{ cid: string; choice: FolderChoice } | null>(null)
+  const choice: FolderChoice = data && folderChoice?.cid === data.cid ? folderChoice.choice : 'metadata'
+  const sourceRoot = chooseSourceRoot(live, requestedFile, choice)
 
   const linkNetwork = detectNetworkFromAddress(accountId) ? undefined : network
   const hrefFor = (opts: { tab?: Tab; file?: string | null }) => {
@@ -209,20 +204,19 @@ function Workspace({ accountId }: { accountId: string }) {
                   network={network}
                   data={data}
                   root={sourceRoot}
-                  onOpenHint={(open) => {
+                  onChooseFolder={(next) => {
                     // A file picked in the other folder would no longer be listed.
-                    setHintOpenFor(open ? data.cid : null)
+                    setFolderChoice({ cid: data.cid, choice: next })
                     replaceQuery({ file: null })
                   }}
                   onRetryMetadata={metadata.retry}
-                  onRetrySnapshot={recorded.retry}
                   requested={requestedFile}
                   hrefFor={(file) => hrefFor({ file })}
                   onSelect={(file) => replaceQuery({ file })}
                   check={check}
                 />
               ) : tab === 'evidence' ? (
-                <EvidencePane accountId={accountId} network={network} data={data} check={check} recorded={recorded.source} onRetryRecorded={recorded.retry} entryFile={entryFile} entryFileUrl={entryFileUrl} />
+                <EvidencePane accountId={accountId} network={network} data={data} check={check} recorded={recorded.source} onRetryRecorded={recorded.retry} />
               ) : (
                 <BuildPane metadata={metadata.load} onRetry={metadata.retry} recorded={recorded.source} live={live} />
               )}

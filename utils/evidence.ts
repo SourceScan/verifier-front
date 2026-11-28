@@ -2,15 +2,17 @@ import type { GithubDto } from '@/Interfaces/github/github.dto'
 import type { MetadataLoad } from '@/utils/contractMetadata'
 
 /*
- * Which source a verification record refers to, and when the contract's
- * current NEP-330 metadata may stand in for it.
+ * Which source a verification record refers to, and how the contract's
+ * current NEP-330 metadata may be used next to it.
  *
  * The registry records the IPFS snapshot (cid), the code hash and the block;
- * it does not record a repository or contract path. The metadata read now
- * describes whatever is deployed today, which can be a later build. So it is
- * applied to the recorded snapshot only when it names the same repository and
- * commit as the record itself; otherwise it is only shown labelled as current
- * metadata, or offered as a folder the reader can choose to open.
+ * it records neither a repository nor the crate that was built. The metadata
+ * read now describes whatever is deployed today, which can be a later build.
+ * So the recorded repository and commit come only from the record or from the
+ * git checkout inside its snapshot, and anything taken from the current
+ * metadata (its commit, its contract path) is shown labelled as such. Even
+ * when it names the recorded commit, its contract path is not the verified
+ * crate: one commit can hold several crates.
  */
 
 /** Repository and commit of the recorded snapshot. */
@@ -18,9 +20,12 @@ export type RecordedSource =
   | { status: 'loading' }
   /** From the registry record, or from the git checkout stored in the recorded snapshot. */
   | { status: 'known'; github: GithubDto; origin: 'record' | 'snapshot' }
-  /** Neither the record nor the snapshot names one. */
-  | { status: 'none' }
-  /** The snapshot couldn't be read, so it is unknown. */
+  /**
+   * Not recorded: the snapshot has no git checkout (`no_checkout`), or its
+   * checkout doesn't name exactly one GitHub repository and commit (`unidentified`).
+   */
+  | { status: 'none'; reason: 'no_checkout' | 'unidentified' }
+  /** The snapshot couldn't be read (or didn't answer in time), so it is unknown. */
   | { status: 'unknown' }
 
 /** The contract's current NEP-330 build source, read at the latest final block. */
@@ -57,44 +62,69 @@ export function liveRelation(recorded: RecordedSource, live: LiveSource): 'same'
 
 export type FolderHint =
   | { status: 'none' }
-  /** The current metadata names this folder, but nothing ties it to the recorded snapshot. */
+  /** The current metadata names this folder; nothing ties it to the verified crate. */
   | { status: 'offered'; dir: string }
   /** The metadata read failed, so whether it names a folder is unknown. */
   | { status: 'unknown' }
+
+/** The reader's choice for the current metadata's folder: follow it (default) or show the snapshot root. */
+export type FolderChoice = 'metadata' | 'root'
 
 export interface SourceRoot {
   /** Snapshot folder to list ('/' = snapshot root); null while it can't be decided yet. */
   rootPath: string | null
   /**
-   * verified: the crate folder of the recorded source (the metadata names the same commit)
-   * snapshot_root: the root of the snapshot, because no folder is tied to the record
-   * hint: the folder the current metadata names, opened by the reader or by a link into it
+   * current_metadata: the folder named in the contract's current metadata (always labelled)
+   * link: the folder of the file a `?file=` link names
+   * snapshot_root: the root of the snapshot
    */
-  basis: 'pending' | 'verified' | 'snapshot_root' | 'hint'
+  basis: 'pending' | 'current_metadata' | 'link' | 'snapshot_root'
   hint: FolderHint
-  /** Crate folder of the recorded source ('' = root), when it is known. */
-  verifiedDir: string | null
 }
 
-const inDir = (file: string | null, dir: string) => !!file && file.startsWith(`${dir}/`)
+/** A file path inside the snapshot: plain segments, no "." or "..", no backslashes or control characters. */
+export const isSnapshotFilePath = (path: string) =>
+  // eslint-disable-next-line no-control-regex
+  !/[\\\u0000-\u001f\u007f]/.test(path) && path.split('/').every((s) => s !== '' && s !== '.' && s !== '..')
+
+/** The crate folder a linked file sits in: the part before its first `src/`, else its folder ('' = root). */
+export function linkedDir(file: string): string {
+  const crate = /^(?:(.*?)\/)?src\//.exec(file)
+  if (crate) return crate[1] ?? ''
+  return file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : ''
+}
+
+/** Whether listing `dir` (its files and one folder below) shows `file`. */
+const covers = (dir: string, file: string) => {
+  const rest = dir === '' ? file : file.startsWith(`${dir}/`) ? file.slice(dir.length + 1) : null
+  return rest !== null && rest.split('/').length <= 2
+}
 
 /**
- * Picks the snapshot folder the source tree opens at.
- * `requested` is the `?file=` path; `openHint` is the reader's choice to open the offered folder.
+ * Picks the snapshot folder the source tree opens at, in this order:
+ * 1. the snapshot root, when the reader chose it and the link (if any) is listed there;
+ * 2. the current metadata's folder, when the link is inside it;
+ * 3. the linked file's own folder;
+ * 4. the current metadata's folder (labelled as such), or else the snapshot root.
+ * It depends only on the current metadata, the `?file=` link and the reader's
+ * choice, never on the recorded-source read, so that read can't hold up
+ * browsing. A link opens at once, without waiting for the metadata.
  */
-export function chooseSourceRoot(recorded: RecordedSource, live: LiveSource, requested: string | null, openHint: boolean): SourceRoot {
-  const atRoot = (hint: FolderHint): SourceRoot => ({ rootPath: '/', basis: 'snapshot_root', hint, verifiedDir: null })
-  if (live.status === 'loading') return { rootPath: null, basis: 'pending', hint: { status: 'none' }, verifiedDir: null }
-  if (live.status === 'unknown') return atRoot({ status: 'unknown' })
-  if (live.status === 'absent' || live.contractDir === null) return atRoot({ status: 'none' })
+export function chooseSourceRoot(live: LiveSource, requested: string | null, choice: FolderChoice): SourceRoot {
+  const link = requested && isSnapshotFilePath(requested) ? requested : null
+  const hint: FolderHint =
+    live.status === 'unknown'
+      ? { status: 'unknown' }
+      : live.status === 'ready' && live.contractDir
+        ? { status: 'offered', dir: live.contractDir }
+        : { status: 'none' }
+  const metaDir = hint.status === 'offered' ? hint.dir : null
+  const at = (dir: string, basis: SourceRoot['basis']): SourceRoot =>
+    dir ? { rootPath: dir, basis, hint } : { rootPath: '/', basis: 'snapshot_root', hint }
 
-  const dir = live.contractDir
-  if (liveRelation(recorded, live) === 'same')
-    return { rootPath: dir || '/', basis: 'verified', hint: { status: 'none' }, verifiedDir: dir }
-  // A root crate path opens the root either way; nothing to offer.
-  if (dir === '') return atRoot({ status: 'none' })
-  // Wait for the snapshot before deciding, so the tree doesn't open one folder and jump to another.
-  if (recorded.status === 'loading') return { rootPath: null, basis: 'pending', hint: { status: 'none' }, verifiedDir: null }
-  const hint: FolderHint = { status: 'offered', dir }
-  return openHint || inDir(requested, dir) ? { rootPath: dir, basis: 'hint', hint, verifiedDir: null } : atRoot(hint)
+  if (!link && live.status === 'loading') return { rootPath: null, basis: 'pending', hint }
+  if (choice === 'root' && (!link || covers('', link))) return at('', 'snapshot_root')
+  if (link && metaDir !== null && link.startsWith(`${metaDir}/`)) return at(metaDir, 'current_metadata')
+  if (link) return at(linkedDir(link), 'link')
+  return metaDir !== null ? at(metaDir, 'current_metadata') : at('', 'snapshot_root')
 }

@@ -123,26 +123,59 @@ function githubFromSnapshot(snapshot: unknown): GithubDto | null {
 }
 
 /**
- * The repository and commit of a git checkout, from its `.git/HEAD` (a
- * detached commit) and the `origin` remote in `.git/config`. Null unless both
- * name a GitHub repository and a full commit SHA.
+ * Owner and repository of a GitHub clone URL that names exactly a
+ * repository: https://github.com/o/r, git@github.com:o/r or
+ * ssh://git@github.com/o/r, each with an optional ".git". Anything else
+ * (credentials, ports, queries, web paths such as /o/r/tree/main) is null.
+ */
+function githubRepoFromRemote(url: string): { owner: string; repo: string } | null {
+  const m =
+    /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(url) ??
+    /^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/.exec(url) ??
+    /^ssh:\/\/git@github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(url)
+  return m && OWNER.test(m[1]) && REPO.test(m[2]) ? { owner: m[1], repo: m[2] } : null
+}
+
+/**
+ * The repository and commit of a git checkout, from its `.git/HEAD` and
+ * `.git/config`, as written by `git clone` followed by `git checkout <sha>`:
+ * a detached HEAD and one `[remote "origin"]` with one plain `url`.
+ * Anything that would make the answer depend on interpretation is null:
+ * another HEAD form, no origin or several, a remote that differs from
+ * "origin" only in case, a second url, quoted or escaped values, url
+ * rewrites (`[url ...]`), includes, or the old `[remote.origin]` syntax.
  */
 function githubFromGitCheckout(head: string, config: string): GithubDto | null {
+  if (!/^[0-9a-f]{40}\n?$/.test(head)) return null
   const sha = head.trim()
-  if (!SHA.test(sha)) return null
-  let section = ''
-  let url: string | null = null
+  let section: string | null = null
+  let originSections = 0
+  const urls: string[] = []
   for (const raw of config.split(/\r?\n/)) {
     const line = raw.trim()
+    if (line === '' || line.startsWith('#') || line.startsWith(';')) continue
     if (line.startsWith('[')) {
-      section = line.replace(/\s+/g, ' ').toLowerCase()
+      const sub = /^\[([A-Za-z0-9.-]+) "([^"\\]*)"\]$/.exec(line)
+      const plain = /^\[([A-Za-z0-9-]+)\]$/.exec(line)
+      if (!sub && !plain) return null
+      const name = (sub ?? plain)![1].toLowerCase()
+      if (name === 'include' || name === 'includeif' || name === 'url' || name.startsWith('remote.')) return null
+      if (sub && name === 'remote' && sub[2] !== 'origin' && sub[2].toLowerCase() === 'origin') return null
+      section = sub && name === 'remote' && sub[2] === 'origin' ? 'origin' : 'other'
+      if (section === 'origin') originSections++
       continue
     }
-    const m = section === '[remote "origin"]' ? /^url\s*=\s*(.+)$/i.exec(line) : null
-    if (m) url = m[1].trim()
+    if (section === null) return null
+    if (section !== 'origin') continue
+    const kv = /^([A-Za-z][A-Za-z0-9-]*)\s*=\s*(.*)$/.exec(line)
+    if (!kv) return null
+    if (kv[1].toLowerCase() !== 'url') continue
+    if (/["\\;#]/.test(kv[2])) return null
+    urls.push(kv[2].trim())
   }
-  if (!url || /[?#\s]/.test(url)) return null
-  return githubFromSnapshot(`git+${url}#${sha}`)
+  if (originSections !== 1 || urls.length !== 1) return null
+  const repo = githubRepoFromRemote(urls[0])
+  return repo ? { ...repo, sha } : null
 }
 
 export { extractGitHubDetails, githubFromGitCheckout, githubFromSnapshot, isGithubDto }

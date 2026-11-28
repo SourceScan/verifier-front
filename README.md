@@ -24,7 +24,7 @@ The registry rows show recorded verifications. The contract workspace checks dep
 
 Registry totals come from the REST API configured by `NEXT_PUBLIC_API_HOST`. IPFS source snapshots use the app's `/api/proxy-ipfs` route.
 
-The Evidence tab names the repository and commit of the recorded snapshot: the record's own `github`, or the git checkout stored in the snapshot. The contract's NEP-330 metadata, read at the latest final block, is shown on the Build tab as current metadata. It picks the source tree's folder only when it names that same repository and commit.
+The Evidence tab names the repository and commit of the recorded snapshot: the record's own `github`, or the git checkout stored in the snapshot. The contract's NEP-330 metadata, read at the latest final block, is shown on the Build tab as current metadata. The source tree opens the folder it names, labelled as current metadata: the registry doesn't record which crate was built. The snapshot's git checkout is read only when the Evidence or Build tab is open.
 
 ## Learn More
 

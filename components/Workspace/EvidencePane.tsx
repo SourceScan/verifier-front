@@ -58,8 +58,11 @@ function RecordedRepository(props: { recorded: RecordedSource; onRetry: () => vo
     )
   return (
     <Muted>
-      Not recorded. The registry stores the snapshot above, not a repository, and the snapshot has no git checkout that names one. The Build tab shows the
-      repository named in the contract’s current metadata, which may describe a later deployment.
+      Not recorded. The registry stores the snapshot above, not a repository, and{' '}
+      {recorded.reason === 'no_checkout'
+        ? 'the snapshot has no git checkout.'
+        : 'the git checkout in the snapshot doesn’t name exactly one GitHub repository and commit.'}{' '}
+      The Build tab shows the repository named in the contract’s current metadata, which may describe a later deployment.
     </Muted>
   )
 }
@@ -71,9 +74,6 @@ export default function EvidencePane(props: {
   check: HashCheck
   recorded: RecordedSource
   onRetryRecorded: () => void
-  /** Entry file on GitHub, only when the recorded source and its crate folder are both known. */
-  entryFileUrl: string | null
-  entryFile: string
 }) {
   const { accountId, network, data, check } = props
   return (
@@ -118,13 +118,6 @@ export default function EvidencePane(props: {
         <Field label="Repository">
           <RecordedRepository recorded={props.recorded} onRetry={props.onRetryRecorded} />
         </Field>
-        {props.entryFileUrl && (
-          <Field label="Entry file on GitHub">
-            <ExternalTextLink href={props.entryFileUrl} fontFamily="mono" fontSize="13px" srSuffix="on GitHub">
-              {props.entryFile || 'Repository root'}
-            </ExternalTextLink>
-          </Field>
-        )}
         <Field label="Registry contract">
           <Mono>{NETWORKS[network].contract}</Mono>
         </Field>

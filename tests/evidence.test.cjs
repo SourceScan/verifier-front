@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
 const { metadataLoadFromValue } = require('../utils/contractMetadata.ts')
-const { chooseSourceRoot, liveRelation, liveSource, sameSource } = require('../utils/evidence.ts')
+const { chooseSourceRoot, isSnapshotFilePath, linkedDir, liveRelation, liveSource, sameSource } = require('../utils/evidence.ts')
 const { githubFromGitCheckout, githubFromSnapshot, isGithubDto } = require('../utils/extractGithub.ts')
 
 const SHA = 'a2dd140892b68140bf7e70814604d3ba074d656c'
@@ -37,15 +37,49 @@ test('a snapshot string is parsed into a link-safe repository and full commit, o
     assert.equal(isGithubDto(value), false)
 })
 
+const CLONE_CONFIG = [
+  '[core]',
+  '\trepositoryformatversion = 0',
+  '\tfilemode = true',
+  '\tbare = false',
+  '\tlogallrefupdates = true',
+  '[remote "origin"]',
+  '\turl = https://github.com/near/intents',
+  '\tfetch = +refs/heads/*:refs/remotes/origin/*',
+  '[branch "main"]',
+  '\tremote = origin',
+  '\tmerge = refs/heads/main',
+  '',
+].join('\n')
+
 test('the git checkout stored in a snapshot names its repository and commit', () => {
-  const config = ['[core]', '\trepositoryformatversion = 0', '[remote "origin"]', '\turl = https://github.com/near/intents', '\tfetch = +refs/heads/*:refs/remotes/origin/*', '[branch "main"]', '\tremote = origin'].join('\n')
-  assert.deepEqual(githubFromGitCheckout(`${SHA}\n`, config), verified)
-  assert.deepEqual(githubFromGitCheckout(SHA, config.replace('https://github.com/near/intents', 'git@github.com:near/intents.git')), verified)
-  // A branch checkout, another remote or a non-GitHub remote doesn't pin a GitHub commit.
-  assert.equal(githubFromGitCheckout('ref: refs/heads/main\n', config), null)
-  assert.equal(githubFromGitCheckout(SHA, config.replace('[remote "origin"]', '[remote "fork"]')), null)
-  assert.equal(githubFromGitCheckout(SHA, config.replace('github.com', 'gitlab.com')), null)
-  assert.equal(githubFromGitCheckout(SHA, config.replace('intents\n', `intents?rev=${LATER}\n`)), null)
+  assert.deepEqual(githubFromGitCheckout(`${SHA}\n`, CLONE_CONFIG), verified)
+  for (const url of ['https://github.com/near/intents.git', 'https://github.com/near/intents/', 'git@github.com:near/intents.git', 'ssh://git@github.com/near/intents.git'])
+    assert.deepEqual(githubFromGitCheckout(SHA, CLONE_CONFIG.replace('https://github.com/near/intents', url)), verified, url)
+})
+
+test('a git checkout that is ambiguous or not a plain GitHub clone names nothing', () => {
+  const variants = {
+    'branch HEAD': ['ref: refs/heads/main\n', CLONE_CONFIG],
+    'uppercase HEAD': [`${SHA.toUpperCase()}\n`, CLONE_CONFIG],
+    'HEAD with extra lines': [`${SHA}\n${LATER}\n`, CLONE_CONFIG],
+    'no origin': [SHA, CLONE_CONFIG.replace('[remote "origin"]', '[remote "fork"]')],
+    'origin and Origin': [SHA, `${CLONE_CONFIG}[remote "Origin"]\n\turl = https://github.com/someone/intents\n`],
+    'two origin sections': [SHA, `${CLONE_CONFIG}[remote "origin"]\n\turl = https://github.com/someone/intents\n`],
+    'two origin urls': [SHA, CLONE_CONFIG.replace('\tfetch =', '\turl = https://github.com/someone/intents\n\tfetch =')],
+    'old [remote.origin] syntax': [SHA, CLONE_CONFIG.replace('[remote "origin"]', '[remote.origin]')],
+    'url rewrite': [SHA, `${CLONE_CONFIG}[url "https://github.com/someone/"]\n\tinsteadOf = https://github.com/near/\n`],
+    include: [SHA, `[include]\n\tpath = other\n${CLONE_CONFIG}`],
+    'quoted url': [SHA, CLONE_CONFIG.replace('url = https://github.com/near/intents', 'url = "https://github.com/near/intents"')],
+    'url with comment': [SHA, CLONE_CONFIG.replace('near/intents', 'near/intents ; fork')],
+    'web path': [SHA, CLONE_CONFIG.replace('near/intents', 'near/intents/tree/main')],
+    'extra path segment': [SHA, CLONE_CONFIG.replace('near/intents', 'near/intents/extra')],
+    credentials: [SHA, CLONE_CONFIG.replace('https://github.com', 'https://user@github.com')],
+    query: [SHA, CLONE_CONFIG.replace('near/intents', `near/intents?rev=${LATER}`)],
+    'other host': [SHA, CLONE_CONFIG.replace('github.com', 'gitlab.com')],
+    'key before any section': [SHA, `url = https://github.com/near/intents\n${CLONE_CONFIG}`],
+  }
+  for (const [name, [head, config]] of Object.entries(variants)) assert.equal(githubFromGitCheckout(head, config), null, name)
 })
 
 test('only the same repository and commit count as the same source', () => {
@@ -60,49 +94,53 @@ test('only the same repository and commit count as the same source', () => {
   assert.equal(liveRelation(known(verified), { status: 'unknown' }), null)
 })
 
-test('after a redeploy, the tree opens the snapshot root and only offers the folder from the current metadata', () => {
-  const root = chooseSourceRoot(known(verified), deployedLater, null, false)
-  assert.deepEqual(root, { rootPath: '/', basis: 'snapshot_root', hint: { status: 'offered', dir: 'contracts/defuse' }, verifiedDir: null })
-
-  // The reader opens it, or follows a link to a file inside it: labelled, never "verified".
-  for (const [requested, open] of [[null, true], ['contracts/defuse/src/lib.rs', false]])
-    assert.deepEqual(chooseSourceRoot(known(verified), deployedLater, requested, open), {
-      rootPath: 'contracts/defuse',
-      basis: 'hint',
-      hint: { status: 'offered', dir: 'contracts/defuse' },
-      verifiedDir: null,
-    })
-  assert.equal(chooseSourceRoot(known(verified), deployedLater, 'contracts/defuse-old/src/lib.rs', false).rootPath, '/')
-})
-
-test('current metadata naming the recorded commit opens the verified crate folder', () => {
-  for (const origin of ['record', 'snapshot'])
-    assert.deepEqual(chooseSourceRoot(known(verified, origin), deployedSame, null, false), {
-      rootPath: 'contracts/defuse',
-      basis: 'verified',
-      hint: { status: 'none' },
-      verifiedDir: 'contracts/defuse',
-    })
-  const atRoot = live({ source_code_snapshot: `git+https://github.com/near/intents?rev=${SHA}` })
-  assert.deepEqual(chooseSourceRoot(known(verified), atRoot, null, false), { rootPath: '/', basis: 'verified', hint: { status: 'none' }, verifiedDir: '' })
-})
-
-test('without a recorded repository, nothing from the current metadata is treated as verified', () => {
-  for (const recorded of [{ status: 'none' }, { status: 'unknown' }]) {
-    const root = chooseSourceRoot(recorded, deployedSame, null, false)
-    assert.equal(root.basis, 'snapshot_root')
-    assert.equal(root.rootPath, '/')
-    assert.equal(root.verifiedDir, null)
-    assert.deepEqual(root.hint, { status: 'offered', dir: 'contracts/defuse' })
+test('the folder from the current metadata is always labelled, never the verified crate', () => {
+  // Same repository and commit as the record, two crates in that tree: the path still only comes from current metadata.
+  for (const dir of ['contracts/ft', 'contracts/nft']) {
+    const current = live({ source_code_snapshot: `git+https://github.com/near/intents?rev=${SHA}`, contract_path: dir })
+    assert.equal(liveRelation(known(verified), current), 'same')
+    assert.deepEqual(chooseSourceRoot(current, null, 'metadata'), { rootPath: dir, basis: 'current_metadata', hint: { status: 'offered', dir } })
   }
-  // Still deciding: no folder is opened yet.
-  assert.equal(chooseSourceRoot({ status: 'loading' }, deployedSame, null, false).rootPath, null)
-  assert.equal(chooseSourceRoot(known(verified), { status: 'loading' }, null, false).rootPath, null)
+  // A later commit is treated the same way: labelled, with the snapshot root one click away.
+  assert.deepEqual(chooseSourceRoot(deployedLater, null, 'metadata'), { rootPath: 'contracts/defuse', basis: 'current_metadata', hint: { status: 'offered', dir: 'contracts/defuse' } })
+  assert.deepEqual(chooseSourceRoot(deployedLater, null, 'root'), { rootPath: '/', basis: 'snapshot_root', hint: { status: 'offered', dir: 'contracts/defuse' } })
+  // The choice never depends on the recorded source, so its read can't hold up the tree.
+  assert.equal(chooseSourceRoot.length, 3)
+})
+
+test('a ?file= link opens its own folder, without waiting for the metadata', () => {
+  const link = 'contracts/ft/src/lib.rs'
+  for (const current of [{ status: 'loading' }, { status: 'unknown' }, { status: 'absent' }])
+    assert.equal(chooseSourceRoot(current, link, 'metadata').rootPath, 'contracts/ft', current.status)
+  assert.deepEqual(chooseSourceRoot({ status: 'unknown' }, link, 'metadata'), { rootPath: 'contracts/ft', basis: 'link', hint: { status: 'unknown' } })
+  // Inside the current metadata's folder, that folder opens (labelled); elsewhere, the link's own folder.
+  assert.equal(chooseSourceRoot(deployedLater, 'contracts/defuse/src/a/b.rs', 'metadata').basis, 'current_metadata')
+  assert.deepEqual(chooseSourceRoot(deployedLater, link, 'metadata'), { rootPath: 'contracts/ft', basis: 'link', hint: { status: 'offered', dir: 'contracts/defuse' } })
+  // The reader chose the snapshot root: a file listed there keeps it.
+  assert.equal(chooseSourceRoot(deployedLater, 'contracts/Cargo.toml', 'root').rootPath, '/')
+  assert.equal(chooseSourceRoot(deployedLater, 'Cargo.toml', 'metadata').rootPath, '/')
+  // Without a link, the tree waits for the metadata.
+  assert.deepEqual(chooseSourceRoot({ status: 'loading' }, null, 'metadata'), { rootPath: null, basis: 'pending', hint: { status: 'none' } })
+  // A path that could leave the snapshot is ignored.
+  assert.equal(chooseSourceRoot({ status: 'absent' }, '../x/src/lib.rs', 'metadata').rootPath, '/')
+})
+
+test('linked files map to their crate folder; unsafe paths are not snapshot paths', () => {
+  for (const [file, dir] of [
+    ['src/lib.rs', ''],
+    ['Cargo.toml', ''],
+    ['contracts/ft/src/lib.rs', 'contracts/ft'],
+    ['contracts/ft/src/a/src/b.rs', 'contracts/ft'],
+    ['contracts/ft/Cargo.toml', 'contracts/ft'],
+    ['a/b/c.rs', 'a/b'],
+  ])
+    assert.equal(linkedDir(file), dir, file)
+  for (const path of ['src/lib.rs', 'a/b.toml']) assert.equal(isSnapshotFilePath(path), true, path)
+  for (const path of ['', '/src/lib.rs', 'a//b.rs', '../a.rs', 'a/./b.rs', 'a\\b.rs', 'a/\nb.rs']) assert.equal(isSnapshotFilePath(path), false, JSON.stringify(path))
 })
 
 test('a failed metadata read leaves the folder unknown, with no claim about the snapshot', () => {
-  const root = chooseSourceRoot(known(verified), liveSource({ status: 'unknown' }, null), 'contracts/defuse/src/lib.rs', true)
-  assert.deepEqual(root, { rootPath: '/', basis: 'snapshot_root', hint: { status: 'unknown' }, verifiedDir: null })
+  assert.deepEqual(chooseSourceRoot(liveSource({ status: 'unknown' }, null), null, 'metadata'), { rootPath: '/', basis: 'snapshot_root', hint: { status: 'unknown' } })
 })
 
 test('no metadata, no build info or an unusable contract path offers nothing', () => {
@@ -116,6 +154,7 @@ test('no metadata, no build info or an unusable contract path offers nothing', (
 
   const unusable = live({ source_code_snapshot: `git+https://github.com/near/intents?rev=${SHA}`, contract_path: '../outside' })
   assert.deepEqual(unusable, { status: 'ready', github: verified, contractDir: null })
-  for (const current of [unusable, { status: 'absent' }])
-    assert.deepEqual(chooseSourceRoot(known(verified), current, null, true), { rootPath: '/', basis: 'snapshot_root', hint: { status: 'none' }, verifiedDir: null })
+  const atRoot = live({ source_code_snapshot: `git+https://github.com/near/intents?rev=${SHA}` })
+  for (const current of [unusable, atRoot, { status: 'absent' }])
+    assert.deepEqual(chooseSourceRoot(current, null, 'metadata'), { rootPath: '/', basis: 'snapshot_root', hint: { status: 'none' } })
 })
