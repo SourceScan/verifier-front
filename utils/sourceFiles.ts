@@ -147,6 +147,31 @@ export async function fetchSource(network: NetworkType, cid: string, path: strin
   return text
 }
 
+const checkoutCache = new Map<string, { head: string; config: string } | null>()
+
+/**
+ * `.git/HEAD` and `.git/config` of the git checkout stored at the snapshot
+ * root, or null when the snapshot has no `.git` folder (older SourceScan
+ * snapshots don't keep one). Throws when the snapshot can't be read. A
+ * snapshot is content-addressed, so a successful answer is kept.
+ */
+export async function readSnapshotCheckout(network: NetworkType, cid: string) {
+  const key = `${network}:${cid}`
+  const hit = checkoutCache.get(key)
+  if (hit !== undefined) return hit
+  const root = await structure(network, cid, '/')
+  let checkout: { head: string; config: string } | null = null
+  if (root.some((entry) => entry.type === 'dir' && entry.name === '.git')) {
+    const [head, config] = await Promise.all([
+      fetchSourceFile(network, cid, '.git/HEAD'),
+      fetchSourceFile(network, cid, '.git/config'),
+    ])
+    checkout = { head, config }
+  }
+  checkoutCache.set(key, checkout)
+  return checkout
+}
+
 /** lib.rs for Rust contracts, otherwise the first path (same rule as before). */
 export const entryPath = (paths: string[], lang?: string) =>
   (lang === 'rust' && paths.find((p) => p === 'src/lib.rs' || p.endsWith('/lib.rs') || p === 'lib.rs')) || paths[0]

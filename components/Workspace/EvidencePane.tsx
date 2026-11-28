@@ -6,10 +6,10 @@ import { Field, Fields, Panel } from '@/components/Common/Panel'
 import { verdictSummary } from '@/components/Contracts/Verdict'
 import { NETWORKS, NetworkType } from '@/contexts/NetworkContext'
 import type { HashCheck } from '@/hooks/useCodeHashCheck'
-import type { GithubDto } from '@/Interfaces/github/github.dto'
 import { ContractData, recordedBlock } from '@/utils/contracts'
+import type { RecordedSource } from '@/utils/evidence'
 import { explorerContractUrl } from '@/utils/urls'
-import { HStack, Text } from '@chakra-ui/react'
+import { Button, HStack, Spinner, Stack, Text } from '@chakra-ui/react'
 import { ReactNode } from 'react'
 
 const Mono = (props: { children: ReactNode }) => (
@@ -18,12 +18,60 @@ const Mono = (props: { children: ReactNode }) => (
   </Text>
 )
 
+const Muted = (props: { children: ReactNode }) => (
+  <Text as="span" color="muted">
+    {props.children}
+  </Text>
+)
+
+/** Only the repository the record itself proves: the record's own, or the git checkout inside its snapshot. */
+function RecordedRepository(props: { recorded: RecordedSource; onRetry: () => void }) {
+  const { recorded } = props
+  if (recorded.status === 'loading')
+    return (
+      <HStack as="span" spacing={2} color="muted">
+        <Spinner size="xs" aria-hidden />
+        <span>Reading the snapshot…</span>
+      </HStack>
+    )
+  if (recorded.status === 'known')
+    return (
+      <Stack spacing={1}>
+        <GithubLink github={recorded.github} />
+        {recorded.origin === 'snapshot' && (
+          <Text fontSize="13px" color="muted">
+            From the git checkout stored in the verified snapshot.
+          </Text>
+        )}
+      </Stack>
+    )
+  if (recorded.status === 'unknown')
+    return (
+      <HStack spacing={2} flexWrap="wrap">
+        <Text as="span" color="status.warn">
+          Unknown: the snapshot couldn’t be read.
+        </Text>
+        <Button size="sm" variant="quiet" onClick={props.onRetry}>
+          Try again
+        </Button>
+      </HStack>
+    )
+  return (
+    <Muted>
+      Not recorded. The registry stores the snapshot above, not a repository, and the snapshot has no git checkout that names one. The Build tab shows the
+      repository named in the contract’s current metadata, which may describe a later deployment.
+    </Muted>
+  )
+}
+
 export default function EvidencePane(props: {
   accountId: string
   network: NetworkType
   data: ContractData
   check: HashCheck
-  github: GithubDto | null
+  recorded: RecordedSource
+  onRetryRecorded: () => void
+  /** Entry file on GitHub, only when the recorded source and its crate folder are both known. */
   entryFileUrl: string | null
   entryFile: string
 }) {
@@ -67,8 +115,10 @@ export default function EvidencePane(props: {
             <CopyButton value={data.cid} label="Copy IPFS CID" />
           </HStack>
         </Field>
-        <Field label="Repository">{props.github ? <GithubLink github={props.github} /> : <Text as="span" color="muted">Not published</Text>}</Field>
-        {props.github && props.entryFileUrl && (
+        <Field label="Repository">
+          <RecordedRepository recorded={props.recorded} onRetry={props.onRetryRecorded} />
+        </Field>
+        {props.entryFileUrl && (
           <Field label="Entry file on GitHub">
             <ExternalTextLink href={props.entryFileUrl} fontFamily="mono" fontSize="13px" srSuffix="on GitHub">
               {props.entryFile || 'Repository root'}

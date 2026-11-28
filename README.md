@@ -24,6 +24,8 @@ The registry rows show recorded verifications. The contract workspace checks dep
 
 Registry totals come from the REST API configured by `NEXT_PUBLIC_API_HOST`. IPFS source snapshots use the app's `/api/proxy-ipfs` route.
 
+The Evidence tab names the repository and commit of the recorded snapshot: the record's own `github`, or the git checkout stored in the snapshot. The contract's NEP-330 metadata, read at the latest final block, is shown on the Build tab as current metadata. It picks the source tree's folder only when it names that same repository and commit.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

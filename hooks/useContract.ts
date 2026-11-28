@@ -1,6 +1,7 @@
 import { NETWORKS, NetworkType, useNetwork } from '@/contexts/NetworkContext'
+import { isCacheableMetadata, MetadataLoad, metadataLoadFromError, metadataLoadFromValue } from '@/utils/contractMetadata'
 import { ContractData, isContractData } from '@/utils/contracts'
-import { isRpcFailure, viewFunction } from '@/utils/near/view'
+import { viewFunction } from '@/utils/near/view'
 import { useCallback, useEffect, useState } from 'react'
 
 const TTL_MS = 60 * 1000
@@ -72,31 +73,18 @@ export function useContractRecord(accountId: string, enabled: boolean) {
 
 /* ---------------------------------------------------------------- metadata */
 
-export interface SourceMetadata {
-  version?: string
-  link?: string
-  standards?: { standard: string; version: string }[]
-  build_info?: {
-    build_environment?: string
-    build_command?: string[]
-    contract_path?: string
-    source_code_snapshot?: string
-  }
-}
-
-export type MetadataLoad =
-  | { status: 'loading' }
-  | { status: 'missing' } // contract does not expose contract_source_metadata
-  | { status: 'error' }
-  | { status: 'ready'; metadata: SourceMetadata }
-
 const metadataCache = new Map<string, { at: number; load: MetadataLoad }>()
 
-/** NEP-330 `contract_source_metadata` read from the contract itself. */
+/**
+ * NEP-330 `contract_source_metadata` read from the contract at the latest
+ * final block: the metadata of the code deployed now. A failed read is
+ * `unknown` with a retry and is never cached.
+ */
 export function useSourceMetadata(accountId: string, enabled: boolean) {
   const { network } = useNetwork()
   const key = `${network}:${accountId}`
   const [state, setState] = useState<{ key: string; load: MetadataLoad }>({ key, load: { status: 'loading' } })
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     if (!enabled) return
@@ -107,16 +95,16 @@ export function useSourceMetadata(accountId: string, enabled: boolean) {
     }
     const controller = new AbortController()
     setState({ key, load: { status: 'loading' } })
-    viewFunction<SourceMetadata>(network, accountId, 'contract_source_metadata', undefined, controller.signal)
-      .then((metadata): MetadataLoad => (metadata && typeof metadata === 'object' ? { status: 'ready', metadata } : { status: 'missing' }))
-      .catch((error): MetadataLoad => (isRpcFailure(error) && error.kind !== 'unavailable' ? { status: 'missing' } : { status: 'error' }))
+    viewFunction<unknown>(network, accountId, 'contract_source_metadata', undefined, controller.signal)
+      .then(metadataLoadFromValue, metadataLoadFromError)
       .then((load) => {
         if (controller.signal.aborted) return
-        if (load.status !== 'error') metadataCache.set(key, { at: Date.now(), load })
+        if (isCacheableMetadata(load)) metadataCache.set(key, { at: Date.now(), load })
         setState({ key, load })
       })
     return () => controller.abort()
-  }, [enabled, network, accountId, key])
+  }, [enabled, network, accountId, key, attempt])
 
-  return state.key === key ? state.load : ({ status: 'loading' } as MetadataLoad)
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
+  return { load: state.key === key ? state.load : ({ status: 'loading' } as MetadataLoad), retry }
 }

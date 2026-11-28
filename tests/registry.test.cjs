@@ -178,7 +178,13 @@ test('view calls preserve query errors and reject malformed results', async (t) 
 
   payload = { error: { cause: { name: 'UNKNOWN_ACCOUNT' } } }
   await assert.rejects(read(), { kind: 'unknown_account' })
-  payload = { result: { error: 'Function call returned an error: MethodNotFound' } }
+  payload = { result: { error: 'wasm execution failed with error: MethodResolveError(MethodNotFound)' } }
+  await assert.rejects(read(), { kind: 'method_not_found' })
+  payload = { error: { cause: { name: 'CONTRACT_EXECUTION_ERROR', info: { vm_error: 'MethodResolveError(MethodNotFound)' } }, data: 'Function call returned an error' } }
+  await assert.rejects(read(), { kind: 'method_not_found' })
+  payload = { result: { error: 'wasm execution failed with error: CompilationError(CodeDoesNotExist { account_id: "example.testnet" })' } }
+  await assert.rejects(read(), { kind: 'no_contract_code' })
+  payload = { result: { error: 'wasm execution failed with error: HostError(GuestPanic { panic_msg: "panicked at lib.rs" })' } }
   await assert.rejects(read(), { kind: 'execution_error' })
   payload = { error: { cause: { name: 'UNKNOWN_BLOCK' } } }
   await assert.rejects(read(), { kind: 'unavailable' })

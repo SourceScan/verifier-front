@@ -4,6 +4,7 @@ import { verdictTone } from '@/components/Contracts/Verdict'
 import type { NetworkType } from '@/contexts/NetworkContext'
 import type { HashCheck } from '@/hooks/useCodeHashCheck'
 import type { ContractData } from '@/utils/contracts'
+import type { SourceRoot } from '@/utils/evidence'
 import { cachedSource, cachedSourcePaths, entryPath, fetchSource, listSourcePaths } from '@/utils/sourceFiles'
 import { HEADER_H } from '@/utils/theme'
 import { ipfsFileUrl } from '@/utils/urls'
@@ -11,6 +12,7 @@ import {
   Box,
   Button,
   Center,
+  Code,
   Flex,
   Icon,
   Input,
@@ -43,11 +45,93 @@ const STRIPE: Record<HashCheck['status'], string> = {
 type Files = { key: string; status: 'loading' | 'error' | 'ready'; paths: string[] }
 type Content = { key: string; status: 'loading' | 'error' | 'ready'; text: string }
 
+/**
+ * Says where the tree is opened when the record doesn't prove the folder:
+ * the folder the current metadata names is only offered, labelled as such.
+ */
+function FolderNotice(props: { root: SourceRoot; onOpenHint: (_open: boolean) => void; onRetryMetadata: () => void }) {
+  const { root } = props
+  const hint = root.hint
+  if (hint.status === 'none') return null
+  const warn = hint.status === 'unknown'
+  return (
+    <Flex
+      role="status"
+      mb={3}
+      px={3}
+      py={2}
+      gap={2}
+      align="center"
+      justify="space-between"
+      wrap="wrap"
+      fontSize="sm"
+      border="1px solid"
+      rounded="lg"
+      borderColor={warn ? 'status.warnBorder' : 'rule'}
+      bg={warn ? 'status.warnBg' : 'surface'}
+      color={warn ? 'status.warn' : 'muted'}
+    >
+      <Text flex="1" minW="240px">
+        {hint.status === 'unknown' ? (
+          <>Couldn’t read the contract’s current metadata, so it’s unknown which folder of this snapshot holds the contract. Showing the snapshot root.</>
+        ) : root.basis === 'hint' ? (
+          <>
+            Showing <Code fontSize="13px">{hint.dir}</Code>, the folder named in the contract’s current metadata. The verification record doesn’t name a folder, so
+            this may not be the crate that was verified.
+          </>
+        ) : (
+          <>
+            The verification record doesn’t name the contract’s folder in this snapshot. The contract’s current metadata names{' '}
+            <Code fontSize="13px">{hint.dir}</Code>, which may describe a later deployment.
+          </>
+        )}
+      </Text>
+      {hint.status === 'unknown' ? (
+        <Button size="sm" variant="quiet" onClick={props.onRetryMetadata}>
+          Try again
+        </Button>
+      ) : root.basis === 'hint' ? (
+        <Button size="sm" variant="quiet" onClick={() => props.onOpenHint(false)}>
+          Show snapshot root
+        </Button>
+      ) : (
+        <Button size="sm" variant="quiet" onClick={() => props.onOpenHint(true)} fontFamily="mono" maxW="full" h="auto" minH={8} py={1} whiteSpace="normal" wordBreak="break-all">
+          Open {hint.dir}/
+        </Button>
+      )}
+    </Flex>
+  )
+}
+
 export default function SourcePane(props: {
   network: NetworkType
   data: ContractData
-  /** NEP-330 contract_path, '/' when absent; null while metadata is still loading. */
+  root: SourceRoot
+  onOpenHint: (_open: boolean) => void
+  onRetryMetadata: () => void
+  /** Also re-reads the snapshot's git checkout when the snapshot couldn't be opened. */
+  onRetrySnapshot: () => void
+  /** `?file=` from the URL. */
+  requested: string | null
+  hrefFor: (_file: string) => string
+  onSelect: (_file: string) => void
+  check: HashCheck
+}) {
+  const { root, onOpenHint, onRetryMetadata, ...tree } = props
+  return (
+    <>
+      <FolderNotice root={root} onOpenHint={onOpenHint} onRetryMetadata={onRetryMetadata} />
+      <SourceTree {...tree} rootPath={root.rootPath} />
+    </>
+  )
+}
+
+function SourceTree(props: {
+  network: NetworkType
+  data: ContractData
+  /** Snapshot folder to list ('/' = root); null while it is still being decided. */
   rootPath: string | null
+  onRetrySnapshot: () => void
   /** `?file=` from the URL. */
   requested: string | null
   hrefFor: (_file: string) => string
@@ -178,7 +262,14 @@ export default function SourcePane(props: {
         <Stack spacing={3} align="center" textAlign="center" role="alert">
           <Text fontWeight="600">Couldn’t open the IPFS snapshot</Text>
           <Text fontSize="sm" color="muted">The verified source for this record could not be read from IPFS right now.</Text>
-          <Button size="sm" variant="quiet" onClick={() => setFilesAttempt((n) => n + 1)}>
+          <Button
+            size="sm"
+            variant="quiet"
+            onClick={() => {
+              props.onRetrySnapshot()
+              setFilesAttempt((n) => n + 1)
+            }}
+          >
             Try again
           </Button>
         </Stack>
@@ -302,7 +393,7 @@ export default function SourcePane(props: {
         </Text>
         {missing && (
           <Text px={3} py={1.5} fontSize="xs" color="status.warn" bg="status.warnBg" borderBottom="1px solid" borderColor="status.warnBorder" role="status">
-            {props.requested} isn’t in this snapshot; showing {active}.
+            {props.requested} isn’t among the files listed from {rootPath === '/' ? 'the snapshot root' : `${rootPath}/`}; showing {active}.
           </Text>
         )}
         <Box flex="1" minH={0} position="relative" sx={{ '& .cm-theme, & .cm-editor': { height: '100%' } }}>

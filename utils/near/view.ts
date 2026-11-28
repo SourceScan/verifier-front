@@ -5,7 +5,7 @@ const RPC_URLS: Record<NetworkType, string> = {
   testnet: 'https://near-testnet.drpc.org',
 }
 
-type RpcErrorKind = 'unknown_account' | 'no_contract_code' | 'execution_error' | 'unavailable'
+export type RpcErrorKind = 'unknown_account' | 'no_contract_code' | 'method_not_found' | 'execution_error' | 'unavailable'
 
 interface RpcFailure extends Error {
   kind: RpcErrorKind
@@ -13,7 +13,7 @@ interface RpcFailure extends Error {
 }
 
 interface QueryError {
-  cause?: { name?: unknown; info?: { block_height?: unknown } }
+  cause?: { name?: unknown; info?: { block_height?: unknown; vm_error?: unknown } }
   data?: unknown
   message?: unknown
 }
@@ -40,13 +40,22 @@ export const isNearCodeHash = (value: unknown): value is string =>
 const classify = (error: QueryError, legacyBlockHeight?: unknown): RpcFailure => {
   const cause = String(error?.cause?.name ?? '')
   const detail = String(error?.data ?? error?.message ?? '')
+  // Structured errors carry the VM error separately; legacy ones only in `data`.
+  const vmError = `${detail} ${String(error?.cause?.info?.vm_error ?? '')}`
   const blockHeight = readBlockHeight(error?.cause?.info?.block_height ?? legacyBlockHeight)
   if (cause === 'UNKNOWN_ACCOUNT' || (!cause && /account \S+ does not exist while viewing/i.test(detail)))
     return failure('unknown_account', detail, blockHeight)
-  if (cause === 'NO_CONTRACT_CODE' || (!cause && /Contract code for contract ID \S+ has never been observed on the node/i.test(detail)))
+  if (
+    cause === 'NO_CONTRACT_CODE' ||
+    (!cause && /Contract code for contract ID \S+ has never been observed on the node/i.test(detail)) ||
+    /CompilationError\(CodeDoesNotExist\b/.test(vmError)
+  )
     return failure('no_contract_code', detail, blockHeight)
-  if (cause === 'CONTRACT_EXECUTION_ERROR' || /wasm execution failed|Function call returned an error/i.test(detail))
+  if (cause === 'CONTRACT_EXECUTION_ERROR' || /wasm execution failed|Function call returned an error/i.test(detail)) {
+    // The contract has code but no such method: a fact about the code, not a failed call.
+    if (/\bMethodNotFound\b/.test(vmError)) return failure('method_not_found', detail)
     return failure('execution_error', detail)
+  }
   return failure('unavailable', detail || 'RPC request failed')
 }
 

@@ -1,3 +1,5 @@
+import type { GithubDto } from '@/Interfaces/github/github.dto'
+
 function extractGitHubDetails(url: string) {
   if (typeof url !== 'string' || !url.startsWith('git+')) {
     throw new Error('Source snapshot must use git+ URL format')
@@ -93,4 +95,54 @@ function getGithubPath(repoUrl: string): string {
   return new URL(repoUrl).pathname
 }
 
-export { extractGitHubDetails }
+// GitHub's own limits: owner 1-39 of [A-Za-z0-9-], repository 1-100 of [A-Za-z0-9._-].
+const OWNER = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/
+const REPO = /^(?!\.{1,2}$)[A-Za-z0-9._-]{1,100}$/
+const SHA = /^[0-9a-f]{40}$/i
+
+/** A repository and full commit SHA that are safe to put into github.com links. */
+function isGithubDto(value: unknown): value is GithubDto {
+  const g = value as GithubDto | null
+  return (
+    typeof g === 'object' && g !== null &&
+    typeof g.owner === 'string' && OWNER.test(g.owner) &&
+    typeof g.repo === 'string' && REPO.test(g.repo) &&
+    typeof g.sha === 'string' && SHA.test(g.sha)
+  )
+}
+
+/** The GitHub repository and commit a NEP-330 `source_code_snapshot` names, or null. */
+function githubFromSnapshot(snapshot: unknown): GithubDto | null {
+  if (typeof snapshot !== 'string') return null
+  try {
+    const github = extractGitHubDetails(snapshot)
+    return isGithubDto(github) ? github : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The repository and commit of a git checkout, from its `.git/HEAD` (a
+ * detached commit) and the `origin` remote in `.git/config`. Null unless both
+ * name a GitHub repository and a full commit SHA.
+ */
+function githubFromGitCheckout(head: string, config: string): GithubDto | null {
+  const sha = head.trim()
+  if (!SHA.test(sha)) return null
+  let section = ''
+  let url: string | null = null
+  for (const raw of config.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (line.startsWith('[')) {
+      section = line.replace(/\s+/g, ' ').toLowerCase()
+      continue
+    }
+    const m = section === '[remote "origin"]' ? /^url\s*=\s*(.+)$/i.exec(line) : null
+    if (m) url = m[1].trim()
+  }
+  if (!url || /[?#\s]/.test(url)) return null
+  return githubFromSnapshot(`git+${url}#${sha}`)
+}
+
+export { extractGitHubDetails, githubFromGitCheckout, githubFromSnapshot, isGithubDto }
