@@ -14,7 +14,7 @@ import { useContractRecord, useSourceMetadata } from '@/hooks/useContract'
 import { useRecordedSource } from '@/hooks/useRecordedSource'
 import { langLabel } from '@/utils/contracts'
 import { detectNetworkFromAddress } from '@/utils/detectNetwork'
-import { chooseSourceRoot, FolderChoice, liveSource } from '@/utils/evidence'
+import { chooseSourceRoot, FolderChoice, liveSource, OpenedWith, openedWithFor } from '@/utils/evidence'
 import { githubFromSnapshot } from '@/utils/extractGithub'
 import { hasClientNavigated, registryUrl } from '@/utils/navigation'
 import { explorerContractUrl, workspaceHref } from '@/utils/urls'
@@ -74,17 +74,21 @@ function Workspace({ accountId }: { accountId: string }) {
     const snapshot = load.status === 'ready' ? load.metadata.buildInfo?.sourceCodeSnapshot : null
     return liveSource(load, githubFromSnapshot(snapshot))
   }, [metadata.load])
-  // The reader's choice between the current metadata's folder and the snapshot root, per snapshot.
-  const [folderChoice, setFolderChoice] = useState<{ cid: string; choice: FolderChoice } | null>(null)
-  const choice: FolderChoice = data && folderChoice?.cid === data.cid ? folderChoice.choice : 'metadata'
-  // Only the ?file= link the workspace was opened with may choose the tree's
+  // State about one record view is keyed by it, so a network switch for the
+  // same account (same workspace) starts fresh.
+  const view = `${network}:${accountId}`
+  const settled = router.isReady && netState === 'ready'
+  // The reader's choice between the current metadata's folder and the snapshot root, per view and snapshot.
+  const [folderChoice, setFolderChoice] = useState<{ key: string; choice: FolderChoice } | null>(null)
+  const choice: FolderChoice = data && folderChoice?.key === `${view}:${data.cid}` ? folderChoice.choice : 'metadata'
+  // Only the ?file= link this view was opened with may choose the tree's
   // folder. Picking a file in the tree updates ?file= too, but never moves it.
-  const [openedWith, setOpenedWith] = useState<{ file: string | null } | null>(null)
+  const [storedOpenedWith, setOpenedWith] = useState<OpenedWith | null>(null)
+  const openedWith = openedWithFor(storedOpenedWith, view, requestedFile)
   useEffect(() => {
-    if (router.isReady && !openedWith) setOpenedWith({ file: requestedFile })
-  }, [router.isReady, openedWith, requestedFile])
-  const deepLink = openedWith ? openedWith.file : router.isReady ? requestedFile : null
-  const sourceRoot = chooseSourceRoot(live, deepLink, choice)
+    if (settled && storedOpenedWith?.view !== view) setOpenedWith({ view, file: requestedFile })
+  }, [settled, storedOpenedWith, view, requestedFile])
+  const sourceRoot = chooseSourceRoot(live, settled ? openedWith.file : null, choice)
 
   const linkNetwork = detectNetworkFromAddress(accountId) ? undefined : network
   const hrefFor = (opts: { tab?: Tab; file?: string | null }) => {
@@ -213,8 +217,8 @@ function Workspace({ accountId }: { accountId: string }) {
                   root={sourceRoot}
                   onChooseFolder={(next) => {
                     // A file picked in the other folder would no longer be listed.
-                    setFolderChoice({ cid: data.cid, choice: next })
-                    setOpenedWith({ file: null })
+                    setFolderChoice({ key: `${view}:${data.cid}`, choice: next })
+                    setOpenedWith({ view, file: null })
                     replaceQuery({ file: null })
                   }}
                   onRetryMetadata={metadata.retry}

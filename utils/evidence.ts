@@ -136,3 +136,17 @@ export function chooseSourceRoot(live: LiveSource, requested: string | null, cho
 
 /** The folder is unknown (the metadata read failed), so an empty listing says nothing about the snapshot. */
 export const folderUnknown = (root: SourceRoot) => root.hint.status === 'unknown'
+
+/**
+ * The `?file=` link a workspace was opened with. It belongs to one record
+ * view (network + account): the same view keeps it while the reader picks
+ * files, and another view (a network switch for the same account) starts
+ * fresh from the address it opened with.
+ */
+export interface OpenedWith {
+  view: string
+  file: string | null
+}
+
+export const openedWithFor = (stored: OpenedWith | null, view: string, current: string | null): OpenedWith =>
+  stored && stored.view === view ? stored : { view, file: current }

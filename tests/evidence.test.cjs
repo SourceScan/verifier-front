@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
 const { metadataLoadFromValue } = require('../utils/contractMetadata.ts')
-const { chooseSourceRoot, folderUnknown, isSnapshotFilePath, linkedDir, liveRelation, liveSource, sameSource } = require('../utils/evidence.ts')
+const { chooseSourceRoot, folderUnknown, isSnapshotFilePath, linkedDir, liveRelation, liveSource, openedWithFor, sameSource } = require('../utils/evidence.ts')
 const { githubFromGitCheckout, githubFromSnapshot, isGithubDto } = require('../utils/extractGithub.ts')
 
 const SHA = 'a2dd140892b68140bf7e70814604d3ba074d656c'
@@ -136,6 +136,21 @@ test('a file the current folder lists never moves the tree', () => {
   assert.equal(chooseSourceRoot(deployedLater, 'contracts/Cargo.toml', 'root').rootPath, '/')
   // Only a link the default folder doesn't list moves it.
   assert.equal(chooseSourceRoot({ status: 'absent' }, 'contracts/ft/src/lib.rs', 'metadata').rootPath, 'contracts/ft')
+})
+
+test('the opened-with link belongs to one network and account; a network switch starts fresh', () => {
+  const link = 'contracts/ft/src/lib.rs'
+  const opened = openedWithFor(null, 'mainnet:9873182a', link)
+  assert.deepEqual(opened, { view: 'mainnet:9873182a', file: link })
+  // Picking another file in the same view keeps the link the view was opened with.
+  assert.equal(openedWithFor(opened, 'mainnet:9873182a', 'Cargo.toml'), opened)
+  // "Check Testnet" for the same account: the Mainnet link no longer applies.
+  assert.deepEqual(openedWithFor(opened, 'testnet:9873182a', null), { view: 'testnet:9873182a', file: null })
+  const tree = (o) => chooseSourceRoot({ status: 'absent' }, o.file, 'metadata').rootPath
+  assert.equal(tree(opened), 'contracts/ft')
+  assert.equal(tree(openedWithFor(opened, 'testnet:9873182a', null)), '/')
+  // Back to Mainnet with the link in the address opens it again.
+  assert.deepEqual(openedWithFor({ view: 'testnet:9873182a', file: null }, 'mainnet:9873182a', link), opened)
 })
 
 test('an empty listing while the folder is unknown is not a statement about the snapshot', () => {
